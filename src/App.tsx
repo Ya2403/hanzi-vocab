@@ -18,7 +18,7 @@ const tabs: { id: Tab; label: string; icon: IconName }[] = [
 type Tab = 'words' | 'review' | 'practice' | 'data';
 
 const tabFromHash = (): Tab => {
-  const h = location.hash.slice(1);
+  const h = location.hash.slice(1).split('?')[0];
   return tabs.some((t) => t.id === h) ? (h as Tab) : 'words';
 };
 

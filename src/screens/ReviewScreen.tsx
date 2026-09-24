@@ -13,9 +13,12 @@ export function ReviewScreen({ onGoToWords }: { onGoToWords(): void }) {
   const { words, streak, daily } = useStore();
   const settings = useSettings();
   const [session, setSession] = useState<Word[] | null>(null);
+  const [tag, setTag] = useState('');
 
   const on = today();
-  const due = useMemo(() => words.filter((w) => isDue(w, on)), [words, on]);
+  const allDue = useMemo(() => words.filter((w) => isDue(w, on)), [words, on]);
+  const tags = useMemo(() => [...new Set(words.flatMap((w) => w.tags))].sort(), [words]);
+  const due = tag ? allDue.filter((w) => w.tags.includes(tag)) : allDue;
   const newCount = due.filter(isNew).length;
   const reviewedToday = daily.date === on ? daily.reviews : 0;
 
@@ -28,7 +31,7 @@ export function ReviewScreen({ onGoToWords }: { onGoToWords(): void }) {
   if (session) {
     return (
       <Session
-        title="Daily review"
+        title={tag ? `Daily review · ${tag}` : 'Daily review'}
         words={session}
         mode={settings.reviewMode}
         direction={settings.reviewDirection}
@@ -50,7 +53,7 @@ export function ReviewScreen({ onGoToWords }: { onGoToWords(): void }) {
       <div className="card hero">
         <div className="hero-stats">
           <div>
-            <div className="stat-value">{due.length}</div>
+            <div className="stat-value">{allDue.length}</div>
             <div className="stat-label">due today</div>
           </div>
           <div>
@@ -64,8 +67,11 @@ export function ReviewScreen({ onGoToWords }: { onGoToWords(): void }) {
         </div>
         {due.length > 0 ? (
           <p className="muted">
+            {tag && `“${tag}”: `}
             {due.length - newCount} to review · {newCount} new
           </p>
+        ) : tag && allDue.length > 0 ? (
+          <p className="muted">Nothing due in “{tag}” today. {allDue.length} due in other words.</p>
         ) : words.length === 0 ? (
           <p className="muted">Add some words to start reviewing.</p>
         ) : (
@@ -89,6 +95,19 @@ export function ReviewScreen({ onGoToWords }: { onGoToWords(): void }) {
             onDirection={(reviewDirection) => updateSettings({ reviewDirection })}
             totalWords={words.length}
           />
+          {tags.length > 0 && (
+            <label className="field">
+              <span className="field-label">Words</span>
+              <select className="select" value={tag} onChange={(e) => setTag(e.target.value)}>
+                <option value="">All due words ({allDue.length})</option>
+                {tags.map((t) => (
+                  <option key={t} value={t}>
+                    {t} ({allDue.filter((w) => w.tags.includes(t)).length} due)
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <button className="btn primary block" disabled={!canStart} onClick={start}>
             {due.length ? `Start review (${due.length})` : 'Nothing due'}
           </button>

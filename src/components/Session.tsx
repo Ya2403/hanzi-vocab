@@ -6,6 +6,7 @@ import type { CardDirection, Direction, PracticeMode, Word } from '../lib/types'
 import { Flashcard } from './Flashcard';
 import { MultipleChoice } from './MultipleChoice';
 import { Writing } from './Writing';
+import { Typing } from './Typing';
 import { Icon } from './Icon';
 
 interface Props {
@@ -132,6 +133,8 @@ export function Session({ title, words: initialWords, mode, direction, updateSch
         <Flashcard key={step} word={word} direction={current.dir} graded={updateSchedule} onAnswer={answer} />
       ) : mode === 'choice' ? (
         <MultipleChoice key={step} word={word} allWords={allWords} direction={current.dir} onAnswer={answer} />
+      ) : mode === 'typing' ? (
+        <Typing key={step} word={word} direction={current.dir} onAnswer={answer} />
       ) : (
         <Writing key={step} word={word} onAnswer={answer} onSkip={skip} />
       )}

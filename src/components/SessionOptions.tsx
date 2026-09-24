@@ -28,8 +28,9 @@ export function SessionOptions({
         value={mode}
         onChange={onMode}
         options={[
-          { value: 'flashcards', label: 'Flashcards' },
+          { value: 'flashcards', label: 'Cards' },
           { value: 'choice', label: 'Choice' },
+          { value: 'typing', label: 'Typing' },
           { value: 'writing', label: 'Writing' },
         ]}
       />
@@ -47,16 +48,23 @@ export function SessionOptions({
           </p>
         </>
       ) : (
-        <Segmented
-          label="Direction"
-          value={direction}
-          onChange={onDirection}
-          options={[
-            { value: 'zh-en', label: '中 → EN' },
-            { value: 'en-zh', label: 'EN → 中' },
-            { value: 'mixed', label: 'Mixed' },
-          ]}
-        />
+        <>
+          {mode === 'typing' && (
+            <p className="hint">
+              中 → EN: type the meaning. EN → 中: type hanzi or pinyin (tone marks or numbers like ni3 hao3; toneless counts as “close”).
+            </p>
+          )}
+          <Segmented
+            label="Direction"
+            value={direction}
+            onChange={onDirection}
+            options={[
+              { value: 'zh-en', label: '中 → EN' },
+              { value: 'en-zh', label: 'EN → 中' },
+              { value: 'mixed', label: 'Mixed' },
+            ]}
+          />
+        </>
       )}
     </>
   );

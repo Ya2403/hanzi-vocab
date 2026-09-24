@@ -29,7 +29,7 @@ export interface Word {
 /** Fields the user edits directly. */
 export type WordInput = Pick<Word, 'hanzi' | 'pinyin' | 'meaning' | 'example' | 'tags'>;
 
-export type PracticeMode = 'flashcards' | 'choice' | 'writing';
+export type PracticeMode = 'flashcards' | 'choice' | 'typing' | 'writing';
 /** zh-en: show Chinese, recall meaning. en-zh: show meaning, recall Chinese. */
 export type CardDirection = 'zh-en' | 'en-zh';
 export type Direction = CardDirection | 'mixed';

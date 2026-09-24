@@ -12,7 +12,8 @@ type Count = '10' | '20' | '50' | 'all';
 export function PracticeScreen() {
   const { words } = useStore();
   const settings = useSettings();
-  const [tag, setTag] = useState<string>('');
+  // A tag can be preselected via a link like #practice?tag=HSK1 (from the word list).
+  const [tag, setTag] = useState(() => new URLSearchParams(location.hash.split('?')[1]).get('tag') ?? '');
   const [count, setCount] = useState<Count>('20');
   const [session, setSession] = useState<Word[] | null>(null);
 

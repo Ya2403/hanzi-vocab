@@ -1153,6 +1153,70 @@ input[type='range'] {
   color: var(--warn);
 }
 
+/* ---------- Typing ---------- */
+
+.typing-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.typing-input {
+  min-height: 56px;
+  font-size: 1.3rem;
+  text-align: center;
+  font-family: var(--font), var(--font-zh);
+}
+
+.typing-input.is-correct {
+  border-color: var(--good);
+  background: var(--good-soft);
+}
+
+.typing-input.is-close {
+  border-color: var(--warn);
+  background: var(--warn-soft);
+}
+
+.typing-input.is-wrong {
+  border-color: var(--bad);
+  background: var(--bad-soft);
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+}
+
+.typing-buttons {
+  justify-content: flex-end;
+}
+
+.typing-feedback {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.typing-feedback .typing-buttons {
+  margin-left: auto;
+}
+
+.typing-feedback .btn {
+  margin-left: 0;
+}
+
+.typing-answer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  color: var(--text);
+}
+
+.typing-answer .answer-head {
+  justify-content: flex-start;
+}
+
+.small-hanzi {
+  font-size: 1.8rem;
+}
+
 /* ---------- Writing ---------- */
 
 .writing-prompt {

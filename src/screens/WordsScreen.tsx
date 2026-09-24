@@ -110,9 +110,16 @@ export function WordsScreen() {
             <span className="muted small">
               {visible.length} of {words.length} words
             </span>
-            <button className="link-btn" onClick={() => setBulk(true)}>
-              Bulk add
-            </button>
+            <span className="row">
+              {tag && (
+                <button className="link-btn" onClick={() => (location.hash = `practice?tag=${encodeURIComponent(tag)}`)}>
+                  Practice “{tag}”
+                </button>
+              )}
+              <button className="link-btn" onClick={() => setBulk(true)}>
+                Bulk add
+              </button>
+            </span>
           </div>
 
           <ul className="word-list">
