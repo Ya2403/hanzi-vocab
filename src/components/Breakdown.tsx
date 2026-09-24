@@ -12,9 +12,12 @@ interface Props {
   onOpenWord?(word: Word): void;
   /** Render as a <details> that loads data only when expanded (flashcard backs). */
   collapsible?: boolean;
+  /** False hides every reading in the breakdown (follows the pinyin visibility setting). */
+  pinyinVisible?: boolean;
 }
 
-export function Breakdown({ word, onOpenWord, collapsible }: Props) {
+export function Breakdown({ word, onOpenWord, collapsible, pinyinVisible = true }: Props) {
+  const cls = `breakdown${pinyinVisible ? '' : ' hide-pinyin'}`;
   const { breakdownOpen } = useSettings();
   const open = !collapsible || breakdownOpen;
   const { status, dict, retry } = useHanziDict(open);
@@ -55,7 +58,7 @@ export function Breakdown({ word, onOpenWord, collapsible }: Props) {
   if (collapsible) {
     return (
       // Stop taps from reaching the flashcard (which flips on click).
-      <details className="breakdown" open={open} onClick={(e) => e.stopPropagation()}>
+      <details className={cls} open={open} onClick={(e) => e.stopPropagation()}>
         <summary
           onClick={(e) => {
             e.preventDefault();
@@ -70,7 +73,7 @@ export function Breakdown({ word, onOpenWord, collapsible }: Props) {
     );
   }
   return (
-    <section className="breakdown">
+    <section className={cls}>
       <h3>Breakdown</h3>
       {body}
       {sheet}
@@ -166,7 +169,7 @@ function EtymologyLine({ ety }: { ety: Etymology }) {
         {p && (
           <>
             <b lang="zh-CN">{p.char}</b>
-            {p.pinyin && ` ${p.pinyin}`} gives the sound
+            {p.pinyin && <span className="pinyin"> {p.pinyin}</span>} gives the sound
           </>
         )}
         {!s && !p && ety.hint}

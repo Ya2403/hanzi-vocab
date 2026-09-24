@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Grade } from '../lib/srs';
-import { getSettings } from '../lib/settings';
+import { getSettings, usePinyinVisibility } from '../lib/settings';
 import { speak } from '../lib/speech';
 import { shuffle } from '../lib/words';
 import type { CardDirection, Word } from '../lib/types';
@@ -41,6 +41,9 @@ export function MultipleChoice({ word, allWords, direction, onAnswer }: Props) {
   const [picked, setPicked] = useState<string | null>(null);
   const answered = picked !== null;
   const correct = picked === word.id;
+  const pv = usePinyinVisibility();
+  const [revealed, setRevealed] = useState(false);
+  const pinyinShown = revealed || (answered ? pv.answer : pv.question);
 
   const pick = (id: string) => {
     if (answered) return;
@@ -53,6 +56,7 @@ export function MultipleChoice({ word, allWords, direction, onAnswer }: Props) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.repeat) return;
+      if (document.querySelector('.modal-backdrop')) return; // e.g. the leech prompt
       if (!answered) {
         const o = options[Number(e.key) - 1];
         if (o) pick(o.id);
@@ -71,10 +75,15 @@ export function MultipleChoice({ word, allWords, direction, onAnswer }: Props) {
         <div className="card-kicker">{direction === 'zh-en' ? 'Choose the meaning' : 'Choose the Chinese'}</div>
         {direction === 'zh-en' ? (
           <>
-            <div className="prompt-hanzi" lang="zh-CN">
+            <div
+              className={`prompt-hanzi ${pinyinShown ? '' : 'can-reveal'}`}
+              lang="zh-CN"
+              onClick={pinyinShown ? undefined : () => setRevealed(true)}
+              title={pinyinShown ? undefined : 'Tap to show pinyin'}
+            >
               {word.hanzi}
             </div>
-            <div className={`pinyin big ${answered ? '' : 'concealed'}`}>{answered ? word.pinyin : '·  ·  ·'}</div>
+            {pinyinShown ? <div className="pinyin big">{word.pinyin}</div> : <div className="reveal-hint">tap the characters for pinyin</div>}
           </>
         ) : (
           <div className="prompt-meaning">{word.meaning}</div>
@@ -95,7 +104,7 @@ export function MultipleChoice({ word, allWords, direction, onAnswer }: Props) {
                   <span className="option-hanzi" lang="zh-CN">
                     {o.hanzi}
                   </span>
-                  {answered && <span className="pinyin">{o.pinyin}</span>}
+                  {(answered ? pv.answer : pv.question) && <span className="pinyin">{o.pinyin}</span>}
                 </span>
               )}
               {state === 'correct' && <Icon name="check" />}
@@ -110,7 +119,8 @@ export function MultipleChoice({ word, allWords, direction, onAnswer }: Props) {
           <span>
             {correct ? 'Correct!' : (
               <>
-                It’s <b lang="zh-CN">{word.hanzi}</b> ({word.pinyin}) — {word.meaning}
+                It’s <b lang="zh-CN">{word.hanzi}</b>
+                {pinyinShown && ` (${word.pinyin})`} — {word.meaning}
               </>
             )}
           </span>

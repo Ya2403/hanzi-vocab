@@ -13,6 +13,14 @@ export interface Settings {
   writingOutline: boolean;
   /** Writing mode: Hanzi Writer's stroke-by-stroke quiz, or draw the whole character then check. */
   writingStyle: 'strokes' | 'free';
+  /** A word becomes a leech after this many lapses. */
+  leechThreshold: number;
+  /** Pinyin on practice question sides and under example sentences. */
+  showPinyin: boolean;
+  /** When pinyin is hidden, still show it once the card is answered. */
+  pinyinAfterAnswer: boolean;
+  /** Pinyin in the word list (separate from practice). */
+  listPinyin: boolean;
   /** Whether the Breakdown section on flashcard backs is expanded. */
   breakdownOpen: boolean;
 }
@@ -28,6 +36,10 @@ const defaults: Settings = {
   writingOutline: false,
   breakdownOpen: false,
   writingStyle: 'strokes',
+  leechThreshold: 5,
+  showPinyin: true,
+  pinyinAfterAnswer: true,
+  listPinyin: true,
 };
 
 let current: Settings = load();
@@ -63,4 +75,13 @@ function subscribe(l: () => void) {
 
 export function useSettings(): Settings {
   return useSyncExternalStore(subscribe, getSettings);
+}
+
+/**
+ * Where practice pinyin is visible. `question`: before answering; `answer`: after answering
+ * (hidden pinyin can still come back on the answer side via "Show pinyin after answering").
+ */
+export function usePinyinVisibility(): { question: boolean; answer: boolean } {
+  const { showPinyin, pinyinAfterAnswer } = useSettings();
+  return { question: showPinyin, answer: showPinyin || pinyinAfterAnswer };
 }

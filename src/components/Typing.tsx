@@ -1,7 +1,7 @@
 import { useRef, useState, type FormEvent } from 'react';
 import { checkChinese, checkMeaning, type Check } from '../lib/answer';
 import { Grade } from '../lib/srs';
-import { getSettings } from '../lib/settings';
+import { getSettings, usePinyinVisibility } from '../lib/settings';
 import { speak } from '../lib/speech';
 import type { CardDirection, Word } from '../lib/types';
 import { SpeakButton } from './SpeakButton';
@@ -17,6 +17,9 @@ const gradeOf: Record<Check['verdict'], number> = { correct: Grade.Good, close: 
 export function Typing({ word, direction, onAnswer }: Props) {
   const [input, setInput] = useState('');
   const [result, setResult] = useState<Check | null>(null);
+  const pv = usePinyinVisibility();
+  const [revealed, setRevealed] = useState(false);
+  const pinyinShown = revealed || (result ? pv.answer : pv.question);
   const inputRef = useRef<HTMLInputElement>(null);
   const toChinese = direction === 'en-zh';
 
@@ -50,10 +53,15 @@ export function Typing({ word, direction, onAnswer }: Props) {
           <div className="prompt-meaning">{word.meaning}</div>
         ) : (
           <>
-            <div className="prompt-hanzi" lang="zh-CN">
+            <div
+              className={`prompt-hanzi ${pinyinShown ? '' : 'can-reveal'}`}
+              lang="zh-CN"
+              onClick={pinyinShown ? undefined : () => setRevealed(true)}
+              title={pinyinShown ? undefined : 'Tap to show pinyin'}
+            >
               {word.hanzi}
             </div>
-            {result && <div className="pinyin big">{word.pinyin}</div>}
+            {pinyinShown ? <div className="pinyin big">{word.pinyin}</div> : <div className="reveal-hint">tap the characters for pinyin</div>}
           </>
         )}
       </div>
@@ -94,10 +102,15 @@ export function Typing({ word, direction, onAnswer }: Props) {
                 {result.note && <span> · {result.note}</span>}
               </div>
               <div className="answer-head">
-                <span className="answer-hanzi small-hanzi" lang="zh-CN">
+                <span
+                  className={`answer-hanzi small-hanzi ${pinyinShown ? '' : 'can-reveal'}`}
+                  lang="zh-CN"
+                  onClick={pinyinShown ? undefined : () => setRevealed(true)}
+                  title={pinyinShown ? undefined : 'Tap to show pinyin'}
+                >
                   {word.hanzi}
                 </span>
-                <span className="pinyin">{word.pinyin}</span>
+                {pinyinShown ? <span className="pinyin">{word.pinyin}</span> : <span className="reveal-hint">tap for pinyin</span>}
                 <SpeakButton text={word.hanzi} />
               </div>
               <div>{word.meaning}</div>

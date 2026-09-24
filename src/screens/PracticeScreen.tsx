@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useStore } from '../store';
 import { updateSettings, useSettings } from '../lib/settings';
 import { shuffle } from '../lib/words';
+import { isLeech, LEECH_FILTER } from '../lib/srs';
 import type { Word } from '../lib/types';
 import { Session } from '../components/Session';
 import { modeAvailable, SessionOptions } from '../components/SessionOptions';
@@ -18,13 +19,15 @@ export function PracticeScreen() {
   const [session, setSession] = useState<Word[] | null>(null);
 
   const tags = useMemo(() => [...new Set(words.flatMap((w) => w.tags))].sort(), [words]);
-  const pool = tag ? words.filter((w) => w.tags.includes(tag)) : words;
+  const leeches = words.filter(isLeech);
+  const pool = tag === LEECH_FILTER ? leeches : tag ? words.filter((w) => w.tags.includes(tag)) : words;
+  const sourceLabel = tag === LEECH_FILTER ? 'Leeches' : tag;
   const size = count === 'all' ? pool.length : Math.min(pool.length, Number(count));
 
   if (session) {
     return (
       <Session
-        title={`Practice${tag ? ` · ${tag}` : ''}`}
+        title={`Practice${tag ? ` · ${sourceLabel}` : ''}`}
         words={session}
         mode={settings.practiceMode}
         direction={settings.practiceDirection}
@@ -48,11 +51,14 @@ export function PracticeScreen() {
           onDirection={(practiceDirection) => updateSettings({ practiceDirection })}
           totalWords={words.length}
         />
-        {tags.length > 0 && (
+        {(tags.length > 0 || leeches.length > 0) && (
           <label className="field">
             <span className="field-label">Words</span>
             <select className="select" value={tag} onChange={(e) => setTag(e.target.value)}>
               <option value="">All words ({words.length})</option>
+              <option value={LEECH_FILTER} disabled={!leeches.length}>
+                🐛 Leeches ({leeches.length})
+              </option>
               {tags.map((t) => (
                 <option key={t} value={t}>
                   {t} ({words.filter((w) => w.tags.includes(t)).length})
@@ -73,7 +79,7 @@ export function PracticeScreen() {
           ]}
         />
         <button className="btn primary block" disabled={!canStart} onClick={() => setSession(shuffle(pool).slice(0, size))}>
-          {size ? `Start (${size} cards)` : 'No words to practice'}
+          {size ? `Start (${size} card${size === 1 ? '' : 's'})` : 'No words to practice'}
         </button>
       </div>
     </section>

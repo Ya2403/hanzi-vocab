@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type MouseEvent } from 'react';
 import { applyReview, formatInterval, Grade } from '../lib/srs';
-import { getSettings } from '../lib/settings';
+import { getSettings, usePinyinVisibility } from '../lib/settings';
 import { speak } from '../lib/speech';
-import { toPinyin } from '../lib/pinyin';
 import type { CardDirection, Word } from '../lib/types';
 import { SpeakButton } from './SpeakButton';
 import { Breakdown } from './Breakdown';
+import { ExampleSentence, NotesBox } from './WordExtras';
 
 interface Props {
   word: Word;
@@ -17,6 +17,8 @@ interface Props {
 
 export function Flashcard({ word, direction, graded, onAnswer }: Props) {
   const [flipped, setFlipped] = useState(false);
+  const pv = usePinyinVisibility();
+  const [revealed, setRevealed] = useState(false);
 
   const buttons = graded
     ? [
@@ -53,11 +55,27 @@ export function Flashcard({ word, direction, graded, onAnswer }: Props) {
     return () => window.removeEventListener('keydown', onKey);
   });
 
+  // Pinyin follows the setting for the side being shown; tapping the characters reveals it for this card.
+  const pinyinShown = revealed || (flipped ? pv.answer : pv.question);
+  const reveal = (e: MouseEvent) => {
+    e.stopPropagation(); // reveal pinyin without flipping the card
+    setRevealed(true);
+  };
+  const hanziTap = pinyinShown ? {} : { onClick: reveal, title: 'Tap to show pinyin' };
+  const pinyinLine = pinyinShown ? (
+    <span className="pinyin big">{word.pinyin}</span>
+  ) : (
+    <span className="reveal-hint">tap the characters for pinyin</span>
+  );
+
   const front =
     direction === 'zh-en' ? (
-      <div className="prompt-hanzi" lang="zh-CN">
-        {word.hanzi}
-      </div>
+      <>
+        <div className={`prompt-hanzi ${pinyinShown ? '' : 'can-reveal'}`} lang="zh-CN" {...hanziTap}>
+          {word.hanzi}
+        </div>
+        {pinyinLine}
+      </>
     ) : (
       <div className="prompt-meaning">{word.meaning}</div>
     );
@@ -71,23 +89,19 @@ export function Flashcard({ word, direction, graded, onAnswer }: Props) {
           <div className="answer">
             <div className="answer-head">
               {direction === 'en-zh' && (
-                <span className="answer-hanzi" lang="zh-CN">
-                  {word.hanzi}
-                </span>
+                <>
+                  <span className={`answer-hanzi ${pinyinShown ? '' : 'can-reveal'}`} lang="zh-CN" {...hanziTap}>
+                    {word.hanzi}
+                  </span>
+                  {pinyinLine}
+                </>
               )}
-              <span className="pinyin big">{word.pinyin}</span>
               <SpeakButton text={word.hanzi} />
             </div>
             {direction === 'zh-en' && <div className="answer-meaning">{word.meaning}</div>}
-            {word.example && (
-              <div className="answer-example">
-                <div lang="zh-CN">
-                  {word.example} <SpeakButton text={word.example} size={16} label="Play example" />
-                </div>
-                <div className="muted small">{toPinyin(word.example)}</div>
-              </div>
-            )}
-            <Breakdown word={word} collapsible />
+            <NotesBox notes={word.notes} />
+            {word.example && <ExampleSentence text={word.example} pinyinVisible={pv.question} />}
+            <Breakdown word={word} collapsible pinyinVisible={pinyinShown} />
           </div>
         ) : (
           <div className="tap-hint">Tap or press Space to reveal</div>

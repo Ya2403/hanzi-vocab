@@ -2,7 +2,9 @@ import { useMemo, useState } from 'react';
 import { useStore } from '../store';
 import { formatDate, today } from '../lib/date';
 import { normalizeSearch, toPinyin } from '../lib/pinyin';
-import { isDue, isNew } from '../lib/srs';
+import { isDue, isLeech, isNew, LEECH_FILTER } from '../lib/srs';
+import { updateSettings, useSettings } from '../lib/settings';
+import { LeechBadge } from '../components/WordExtras';
 import { sampleWords } from '../lib/sample';
 import type { Word } from '../lib/types';
 import { Icon } from '../components/Icon';
@@ -17,6 +19,8 @@ export function WordsScreen() {
   const { words, loading, deleteWord, addWords } = useStore();
   const [query, setQuery] = useState('');
   const [tag, setTag] = useState<string | null>(null);
+  const { listPinyin } = useSettings();
+  const leechCount = words.filter(isLeech).length;
   const [sort, setSort] = useState<Sort>('newest');
   const [editing, setEditing] = useState<Word | 'new' | null>(null);
   const [bulk, setBulk] = useState(false);
@@ -32,7 +36,7 @@ export function WordsScreen() {
     const q = normalizeSearch(query);
     const list = words.filter(
       (w) =>
-        (!tag || w.tags.includes(tag)) &&
+        (!tag || (tag === LEECH_FILTER ? isLeech(w) : w.tags.includes(tag))) &&
         (!q ||
           w.hanzi.includes(query.trim()) ||
           normalizeSearch(w.pinyin).includes(q) ||
@@ -93,13 +97,26 @@ export function WordsScreen() {
               <option value="due">Due soonest</option>
               <option value="pinyin">Pinyin A–Z</option>
             </select>
+            <button
+              className={`pinyin-toggle ${listPinyin ? 'on' : ''}`}
+              onClick={() => updateSettings({ listPinyin: !listPinyin })}
+              aria-pressed={listPinyin}
+              title={listPinyin ? 'Pinyin shown in the list: tap to hide' : 'Pinyin hidden in the list: tap to show'}
+            >
+              拼音
+            </button>
           </div>
 
-          {tagCounts.length > 0 && (
+          {(tagCounts.length > 0 || leechCount > 0) && (
             <div className="chips scroll">
               <button className={`chip ${tag === null ? 'active' : ''}`} onClick={() => setTag(null)}>
                 All <span className="count">{words.length}</span>
               </button>
+              {leechCount > 0 && (
+                <button className={`chip leech-chip ${tag === LEECH_FILTER ? 'active' : ''}`} onClick={() => setTag(tag === LEECH_FILTER ? null : LEECH_FILTER)}>
+                  🐛 Leeches <span className="count">{leechCount}</span>
+                </button>
+              )}
               {tagCounts.map(([t, n]) => (
                 <button key={t} className={`chip ${tag === t ? 'active' : ''}`} onClick={() => setTag(tag === t ? null : t)}>
                   {t} <span className="count">{n}</span>
@@ -115,7 +132,7 @@ export function WordsScreen() {
             <span className="row">
               {tag && (
                 <button className="link-btn" onClick={() => (location.hash = `practice?tag=${encodeURIComponent(tag)}`)}>
-                  Practice “{tag}”
+                  Practice {tag === LEECH_FILTER ? 'leeches' : `“${tag}”`}
                 </button>
               )}
               <button className="link-btn" onClick={() => setBulk(true)}>
@@ -126,7 +143,7 @@ export function WordsScreen() {
 
           <ul className="word-list">
             {visible.map((w) => (
-              <WordRow key={w.id} word={w} onOpen={() => setDetail(w)} onEdit={() => setEditing(w)} onDelete={() => remove(w)} />
+              <WordRow key={w.id} word={w} showPinyin={listPinyin} onOpen={() => setDetail(w)} onEdit={() => setEditing(w)} onDelete={() => remove(w)} />
             ))}
           </ul>
           {visible.length === 0 && <p className="empty">No words match.</p>}
@@ -153,7 +170,19 @@ export function WordsScreen() {
   );
 }
 
-function WordRow({ word, onOpen, onEdit, onDelete }: { word: Word; onOpen(): void; onEdit(): void; onDelete(): void }) {
+function WordRow({
+  word,
+  showPinyin,
+  onOpen,
+  onEdit,
+  onDelete,
+}: {
+  word: Word;
+  showPinyin: boolean;
+  onOpen(): void;
+  onEdit(): void;
+  onDelete(): void;
+}) {
   const status = isNew(word) ? (
     <span className="status new">new</span>
   ) : isDue(word) ? (
@@ -167,7 +196,7 @@ function WordRow({ word, onOpen, onEdit, onDelete }: { word: Word; onOpen(): voi
       <div className="word-main" onClick={onOpen}>
         <div className="word-head">
           <span className="hanzi" lang="zh-CN">{word.hanzi}</span>
-          <span className="pinyin">{word.pinyin}</span>
+          {showPinyin && <span className="pinyin">{word.pinyin}</span>}
         </div>
         <div className="meaning">{word.meaning}</div>
         {word.example && (
@@ -176,6 +205,7 @@ function WordRow({ word, onOpen, onEdit, onDelete }: { word: Word; onOpen(): voi
           </div>
         )}
         <div className="word-meta">
+          {isLeech(word) && <LeechBadge />}
           {status}
           {word.tags.map((t) => (
             <span key={t} className="tag">

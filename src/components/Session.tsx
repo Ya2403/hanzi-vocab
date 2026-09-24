@@ -1,13 +1,14 @@
 import { useMemo, useState } from 'react';
 import { useStore } from '../store';
-import { applyReview } from '../lib/srs';
+import { reviewWithLeech } from '../lib/srs';
 import { shuffle } from '../lib/words';
 import type { CardDirection, Direction, PracticeMode, Word } from '../lib/types';
 import { Flashcard } from './Flashcard';
 import { MultipleChoice } from './MultipleChoice';
 import { Writing } from './Writing';
 import { FreeDraw } from './FreeDraw';
-import { useSettings } from '../lib/settings';
+import { updateSettings, usePinyinVisibility, useSettings } from '../lib/settings';
+import { LeechPrompt } from './LeechPrompt';
 import { Typing } from './Typing';
 import { Icon } from './Icon';
 
@@ -35,7 +36,9 @@ const resolveDir = (d: Direction): CardDirection => (d === 'mixed' ? (Math.rando
  */
 export function Session({ title, words: initialWords, mode, direction, updateSchedule: initialUpdate, onExit }: Props) {
   const { words: allWords, updateWord, recordReview } = useStore();
-  const { writingStyle } = useSettings();
+  const { writingStyle, leechThreshold, showPinyin } = useSettings();
+  const pinyin = usePinyinVisibility();
+  const [leech, setLeech] = useState<{ id: string; lapses: number } | null>(null);
   const [pool, setPool] = useState(initialWords);
   const [updateSchedule, setUpdateSchedule] = useState(initialUpdate);
   const [queue, setQueue] = useState<Step[]>(() => initialWords.map((w) => ({ id: w.id, dir: resolveDir(direction) })));
@@ -43,8 +46,10 @@ export function Session({ title, words: initialWords, mode, direction, updateSch
   const [step, setStep] = useState(0);
 
   const byId = useMemo(() => new Map(pool.map((w) => [w.id, w])), [pool]);
+  const liveById = useMemo(() => new Map(allWords.map((w) => [w.id, w])), [allWords]);
   const current = queue[0];
-  const word = current && byId.get(current.id);
+  // Prefer the stored version, so edits made mid-session (e.g. a note from the leech prompt) show up.
+  const word = current && (liveById.get(current.id) ?? byId.get(current.id));
   const remaining = new Set(queue.map((s) => s.id)).size;
   const done = pool.length - remaining;
 
@@ -53,7 +58,11 @@ export function Session({ title, words: initialWords, mode, direction, updateSch
     if (!results.has(word.id)) {
       setResults((r) => new Map(r).set(word.id, q));
       const writes: Promise<void>[] = [recordReview()];
-      if (updateSchedule) writes.push(updateWord({ ...word, srs: applyReview(word.srs, q) }));
+      if (updateSchedule) {
+        const { srs, becameLeech } = reviewWithLeech(word.srs, q, leechThreshold);
+        writes.push(updateWord({ ...word, srs }));
+        if (becameLeech) setLeech({ id: word.id, lapses: srs.lapses });
+      }
       Promise.all(writes).catch((e) => console.error('Failed to save review', e));
     }
     setQueue(([head, ...rest]) => (q < 3 ? [...rest, { ...head, dir: resolveDir(direction) }] : rest));
@@ -73,6 +82,9 @@ export function Session({ title, words: initialWords, mode, direction, updateSch
     setQueue(shuffled.map((w) => ({ id: w.id, dir: resolveDir(direction) })));
     setResults(new Map());
   };
+
+  // Rendered on top of whatever is showing (the next card, or the summary after the last one).
+  const leechPrompt = leech && <LeechPrompt wordId={leech.id} lapses={leech.lapses} onClose={() => setLeech(null)} />;
 
   if (!word) {
     const graded = [...results.values()];
@@ -94,7 +106,7 @@ export function Session({ title, words: initialWords, mode, direction, updateSch
               {missed.map((w) => (
                 <li key={w.id}>
                   <span className="hanzi" lang="zh-CN">{w.hanzi}</span>
-                  <span className="pinyin">{w.pinyin}</span>
+                  {pinyin.answer && <span className="pinyin">{w.pinyin}</span>}
                   <span className="meaning">{w.meaning}</span>
                 </li>
               ))}
@@ -111,6 +123,7 @@ export function Session({ title, words: initialWords, mode, direction, updateSch
             Done
           </button>
         </div>
+        {leechPrompt}
       </div>
     );
   }
@@ -127,7 +140,16 @@ export function Session({ title, words: initialWords, mode, direction, updateSch
         <span className="muted small">
           {done}/{pool.length}
         </span>
+        <button
+          className={`pinyin-toggle ${showPinyin ? 'on' : ''}`}
+          onClick={() => updateSettings({ showPinyin: !showPinyin })}
+          aria-pressed={showPinyin}
+          title={showPinyin ? 'Pinyin shown: tap to hide' : 'Pinyin hidden: tap to show'}
+        >
+          拼音
+        </button>
       </div>
+      {leechPrompt}
       <div className="session-title muted small">
         {title}
         {results.has(word.id) && ' · retry'}

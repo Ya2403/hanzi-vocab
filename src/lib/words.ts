@@ -8,11 +8,13 @@ export function newId(): string {
 
 export function cleanInput(input: WordInput): WordInput {
   const example = input.example?.trim();
+  const notes = input.notes?.trim();
   return {
     hanzi: input.hanzi.trim(),
     pinyin: input.pinyin.trim().replace(/\s+/g, ' '),
     meaning: input.meaning.trim(),
     example: example || undefined,
+    notes: notes || undefined,
     tags: normalizeTags(input.tags),
   };
 }

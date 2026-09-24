@@ -62,6 +62,7 @@ function normalizeWord(raw: unknown): Word | null {
     pinyin: str(r.pinyin) || toPinyin(hanzi),
     meaning,
     example: str(r.example) || undefined,
+    notes: str(r.notes) || undefined,
     tags: normalizeTags(tags),
     createdAt: num(r.createdAt, now),
     updatedAt: num(r.updatedAt, now),
@@ -80,5 +81,7 @@ function normalizeSrs(raw: unknown): SrsState {
     lapses: Math.max(0, Math.round(num(r.lapses, 0))),
     due: isValidDateStr(r.due) ? r.due : base.due,
     lastReviewed: isValidDateStr(r.lastReviewed) ? r.lastReviewed : undefined,
+    leech: r.leech === true || undefined,
+    lapsesAtUnmark: typeof r.lapsesAtUnmark === 'number' ? Math.max(0, Math.round(r.lapsesAtUnmark)) : undefined,
   };
 }

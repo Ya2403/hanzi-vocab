@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { useStore, type ImportMode } from '../store';
 import { today } from '../lib/date';
 import { exportWords, parseImport } from '../lib/io';
-import { isDue, isNew } from '../lib/srs';
+import { isDue, isLeech, isNew, LEECH_FILTER } from '../lib/srs';
 import { liveStreak } from '../lib/streak';
 import { updateSettings, useSettings } from '../lib/settings';
 import { hasChineseVoice, onVoicesChanged, speak, speechSupported } from '../lib/speech';
@@ -24,6 +24,7 @@ export function DataScreen() {
 
   const learned = words.filter((w) => !isNew(w)).length;
   const mature = words.filter((w) => w.srs.interval >= 21).length;
+  const leeches = words.filter(isLeech).length;
   const due = words.filter((w) => isDue(w)).length;
 
   const onFile = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -59,6 +60,7 @@ export function DataScreen() {
           <Stat value={due} label="due now" />
           <Stat value={liveStreak(streak, today())} label="current streak" />
           <Stat value={streak.longest} label="longest streak" />
+          <Stat value={leeches} label="🐛 leeches" />
         </div>
       </div>
 
@@ -94,6 +96,8 @@ export function DataScreen() {
       </div>
 
       <OfflineData chars={words.flatMap((w) => writableChars(w.hanzi))} />
+
+      <SettingsCard leechCount={leeches} />
 
       <div className="card form">
         <h2>Audio</h2>
@@ -223,6 +227,61 @@ function Stat({ value, label }: { value: number; label: string }) {
     <div className="stat">
       <div className="stat-value">{value}</div>
       <div className="stat-label">{label}</div>
+    </div>
+  );
+}
+
+function SettingsCard({ leechCount }: { leechCount: number }) {
+  const { showPinyin, pinyinAfterAnswer, listPinyin, leechThreshold } = useSettings();
+  return (
+    <div className="card form">
+      <h2>Settings</h2>
+      <p className="muted small">Saved on this device.</p>
+
+      <label className="toggle">
+        <input type="checkbox" checked={showPinyin} onChange={(e) => updateSettings({ showPinyin: e.target.checked })} />
+        <span>Show pinyin in practice</span>
+      </label>
+      <label className={`toggle sub-option ${showPinyin ? "disabled" : ""}`}>
+        <input
+          type="checkbox"
+          checked={pinyinAfterAnswer}
+          disabled={showPinyin}
+          onChange={(e) => updateSettings({ pinyinAfterAnswer: e.target.checked })}
+        />
+        <span>Show pinyin after answering</span>
+      </label>
+      <p className="hint">
+        With pinyin hidden, question sides and example sentences show only characters; tap them to see the pinyin for that
+        card. Writing mode always shows pinyin, because it’s part of the prompt.
+      </p>
+      <label className="toggle">
+        <input type="checkbox" checked={listPinyin} onChange={(e) => updateSettings({ listPinyin: e.target.checked })} />
+        <span>Show pinyin in the word list</span>
+      </label>
+
+      <label className="field">
+        <span className="field-label">Leech threshold</span>
+        <div className="input-row">
+          <input
+            className="input narrow"
+            type="number"
+            min={2}
+            max={20}
+            value={leechThreshold}
+            onChange={(e) => {
+              const n = Math.round(Number(e.target.value));
+              if (n >= 2 && n <= 20) updateSettings({ leechThreshold: n });
+            }}
+          />
+          <span className="small muted">times forgotten before a word is marked 🐛</span>
+        </div>
+      </label>
+      {leechCount > 0 && (
+        <a className="link-btn" href={`#practice?tag=${LEECH_FILTER}`}>
+          Practice your {leechCount} leech{leechCount === 1 ? "" : "es"} →
+        </a>
+      )}
     </div>
   );
 }

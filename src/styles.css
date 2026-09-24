@@ -1436,6 +1436,92 @@ button.part:hover {
   font-weight: 600;
 }
 
+/* ---------- Pinyin visibility ---------- */
+
+.pinyin-toggle {
+  flex: none;
+  padding: 0.25rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-family: var(--font-zh);
+  font-size: 0.8rem;
+  text-decoration: line-through;
+}
+
+.pinyin-toggle.on {
+  border-color: var(--accent);
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.can-reveal {
+  cursor: pointer;
+  text-decoration: underline dotted var(--border);
+  text-underline-offset: 0.2em;
+}
+
+/* Pinyin hidden: the breakdown shouldn't give the reading away either. */
+.breakdown.hide-pinyin .pinyin {
+  display: none;
+}
+
+.reveal-hint {
+  font-size: 0.75rem;
+  color: var(--muted);
+  opacity: 0.8;
+}
+
+.toggle.sub-option {
+  margin-left: 1.9rem;
+  margin-top: -0.4rem;
+}
+
+.toggle.disabled {
+  opacity: 0.5;
+}
+
+.input.narrow {
+  width: 5rem;
+  flex: none;
+}
+
+/* ---------- Notes & leeches ---------- */
+
+.notes-box {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  border-radius: 12px;
+  background: var(--warn-soft);
+  color: var(--text);
+  font-size: 0.92rem;
+  text-align: left;
+  white-space: pre-wrap;
+}
+
+.status.leech {
+  background: color-mix(in srgb, var(--good) 14%, var(--surface));
+  color: var(--good);
+  font-weight: 600;
+}
+
+.progress-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.progress-box .row {
+  gap: 0.4rem;
+}
+
 /* ---------- Free draw ---------- */
 
 .style-toggle {

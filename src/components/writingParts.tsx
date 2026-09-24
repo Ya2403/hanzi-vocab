@@ -9,6 +9,7 @@ export const MAX_BOARD_SIZE = 300;
 export const cssVar = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
 export function WritingPrompt({ word }: { word: Word }) {
+  const { showPinyin } = useSettings();
   return (
     <div className="card prompt-card writing-prompt">
       <div className="card-kicker">Write in Chinese</div>
@@ -17,6 +18,7 @@ export function WritingPrompt({ word }: { word: Word }) {
         <span className="pinyin big">{word.pinyin}</span>
         <SpeakButton text={word.hanzi} />
       </div>
+      {!showPinyin && <div className="reveal-hint">Pinyin stays visible in writing: it’s part of the prompt.</div>}
     </div>
   );
 }

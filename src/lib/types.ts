@@ -6,8 +6,12 @@ export interface SrsState {
   interval: number;
   /** Consecutive successful reviews. */
   reps: number;
-  /** Times the word was forgotten after being learned. */
+  /** Times the word was graded Again after it had graduated (interval ≥ 1 day). */
   lapses: number;
+  /** Flagged as a leech: forgotten `leechThreshold` times. */
+  leech?: boolean;
+  /** `lapses` when the user last unmarked the leech; only lapses after that count again. */
+  lapsesAtUnmark?: number;
   /** Local date (YYYY-MM-DD) on which the word is next due. */
   due: string;
   /** Local date of the last graded review. */
@@ -20,6 +24,8 @@ export interface Word {
   pinyin: string;
   meaning: string;
   example?: string;
+  /** Free-form notes or a memory trick (mnemonic). */
+  notes?: string;
   tags: string[];
   createdAt: number;
   updatedAt: number;
@@ -27,7 +33,7 @@ export interface Word {
 }
 
 /** Fields the user edits directly. */
-export type WordInput = Pick<Word, 'hanzi' | 'pinyin' | 'meaning' | 'example' | 'tags'>;
+export type WordInput = Pick<Word, 'hanzi' | 'pinyin' | 'meaning' | 'example' | 'notes' | 'tags'>;
 
 export type PracticeMode = 'flashcards' | 'choice' | 'typing' | 'writing';
 /** zh-en: show Chinese, recall meaning. en-zh: show meaning, recall Chinese. */

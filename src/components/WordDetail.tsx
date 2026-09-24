@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '../store';
 import { formatDate, today } from '../lib/date';
-import { toPinyin } from '../lib/pinyin';
-import { formatInterval, isDue, isNew } from '../lib/srs';
+import { useSettings } from '../lib/settings';
+import { formatInterval, isDue, isLeech, isNew } from '../lib/srs';
 import type { Word } from '../lib/types';
 import { Breakdown } from './Breakdown';
 import { Icon } from './Icon';
 import { Modal } from './Modal';
 import { SpeakButton } from './SpeakButton';
+import { ExampleSentence, LeechBadge, NotesBox } from './WordExtras';
 
 export function WordDetail({ word: initial, onClose, onEdit }: { word: Word; onClose(): void; onEdit(w: Word): void }) {
   const { words, deleteWord } = useStore();
@@ -15,6 +16,10 @@ export function WordDetail({ word: initial, onClose, onEdit }: { word: Word; onC
   const [stack, setStack] = useState<string[]>([initial.id]);
   const currentId = stack[stack.length - 1];
   const word = words.find((w) => w.id === currentId);
+  // Part of the word list, so it follows the word-list pinyin toggle; tap to reveal per word.
+  const { listPinyin } = useSettings();
+  const [revealedId, setRevealedId] = useState<string | null>(null);
+  const pinyinShown = listPinyin || revealedId === currentId;
 
   // The word was deleted (e.g. via Delete below): close the view.
   useEffect(() => {
@@ -44,22 +49,21 @@ export function WordDetail({ word: initial, onClose, onEdit }: { word: Word; onC
           </button>
         )}
         <div className="detail-head">
-          <span className="detail-hanzi" lang="zh-CN">
+          <span
+            className={`detail-hanzi ${pinyinShown ? '' : 'can-reveal'}`}
+            lang="zh-CN"
+            onClick={pinyinShown ? undefined : () => setRevealedId(word.id)}
+            title={pinyinShown ? undefined : 'Tap to show pinyin'}
+          >
             {word.hanzi}
           </span>
           <SpeakButton text={word.hanzi} size={24} />
         </div>
-        <div className="pinyin big">{word.pinyin}</div>
+        {pinyinShown ? <div className="pinyin big">{word.pinyin}</div> : <div className="reveal-hint">tap the characters for pinyin</div>}
         <div className="detail-meaning">{word.meaning}</div>
+        <NotesBox notes={word.notes} />
 
-        {word.example && (
-          <div className="answer-example">
-            <div lang="zh-CN">
-              {word.example} <SpeakButton text={word.example} size={16} label="Play example" />
-            </div>
-            <div className="muted small">{toPinyin(word.example)}</div>
-          </div>
-        )}
+        {word.example && <ExampleSentence text={word.example} pinyinVisible={listPinyin} />}
 
         {word.tags.length > 0 && (
           <div className="word-meta">
@@ -72,6 +76,11 @@ export function WordDetail({ word: initial, onClose, onEdit }: { word: Word; onC
         )}
 
         <div className="detail-progress small">
+          {isLeech(word) && (
+            <>
+              <LeechBadge />{' '}
+            </>
+          )}
           <b>{status}</b>
           {!isNew(word) && (
             <span className="muted">
@@ -81,7 +90,7 @@ export function WordDetail({ word: initial, onClose, onEdit }: { word: Word; onC
           )}
         </div>
 
-        <Breakdown word={word} onOpenWord={(w) => setStack((st) => [...st, w.id])} />
+        <Breakdown word={word} pinyinVisible={pinyinShown} onOpenWord={(w) => setStack((st) => [...st, w.id])} />
 
         <div className="form-actions">
           <button type="button" className="btn ghost danger-text" onClick={remove}>

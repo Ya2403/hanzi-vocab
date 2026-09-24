@@ -2,6 +2,8 @@ import { useMemo, useState, type FormEvent } from 'react';
 import { useStore } from '../store';
 import { toPinyin } from '../lib/pinyin';
 import { parseTagText } from '../lib/words';
+import { formatInterval, isLeech, isNew, newSrs, unmarkLeech } from '../lib/srs';
+import { LeechBadge } from './WordExtras';
 import type { Word } from '../lib/types';
 import { Modal } from './Modal';
 import { SpeakButton } from './SpeakButton';
@@ -15,6 +17,15 @@ export function WordForm({ word, onClose }: { word?: Word; onClose(): void }) {
   const [pinyinAuto, setPinyinAuto] = useState(!word || word.pinyin === toPinyin(word.hanzi));
   const [meaning, setMeaning] = useState(word?.meaning ?? '');
   const [example, setExample] = useState(word?.example ?? '');
+  const [notes, setNotes] = useState(word?.notes ?? '');
+  // The stored version (progress may change while the dialog is open).
+  const live = word && words.find((w) => w.id === word.id);
+
+  const resetProgress = () => {
+    if (!live) return;
+    if (confirm(`Reset all review progress for “${live.hanzi}”? It will be treated as a new word, and its lapse count and leech mark are cleared.`))
+      updateWord({ ...live, srs: newSrs() });
+  };
   const [tagText, setTagText] = useState(word?.tags.join(', ') ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,8 +63,9 @@ export function WordForm({ word, onClose }: { word?: Word; onClose(): void }) {
     }
     setSaving(true);
     try {
-      const input = { hanzi, pinyin: pinyin.trim() || toPinyin(hanzi), meaning, example, tags };
-      if (word) await updateWord({ ...word, ...input });
+      const input = { hanzi, pinyin: pinyin.trim() || toPinyin(hanzi), meaning, example, notes, tags };
+      // Merge onto the stored word so progress changes made in this dialog aren't overwritten.
+      if (word) await updateWord({ ...(live ?? word), ...input });
       else await addWord(input);
       onClose();
     } catch (err) {
@@ -110,6 +122,19 @@ export function WordForm({ word, onClose }: { word?: Word; onClose(): void }) {
 
         <label className="field">
           <span className="field-label">
+            Notes / mnemonic <span className="optional">optional</span>
+          </span>
+          <textarea
+            className="input"
+            rows={2}
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="A memory trick, usage note, or anything else"
+          />
+        </label>
+
+        <label className="field">
+          <span className="field-label">
             Tags <span className="optional">comma separated</span>
           </span>
           <input className="input" value={tagText} onChange={(e) => setTagText(e.target.value)} placeholder="HSK1, food" />
@@ -121,6 +146,32 @@ export function WordForm({ word, onClose }: { word?: Word; onClose(): void }) {
                 {t}
               </button>
             ))}
+          </div>
+        )}
+
+        {live && !isNew(live) && (
+          <div className="field">
+            <span className="field-label">Progress</span>
+            <div className="progress-box small">
+              <span>
+                {isLeech(live) && (
+                  <>
+                    <LeechBadge />{' '}
+                  </>
+                )}
+                Forgotten {live.srs.lapses}× · {live.srs.reps} correct in a row · interval {formatInterval(live.srs.interval)}
+              </span>
+              <div className="row">
+                {isLeech(live) && (
+                  <button type="button" className="btn small-btn" onClick={() => updateWord({ ...live, srs: unmarkLeech(live.srs) })}>
+                    Unmark leech
+                  </button>
+                )}
+                <button type="button" className="btn small-btn ghost danger-text" onClick={resetProgress}>
+                  Reset progress
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
