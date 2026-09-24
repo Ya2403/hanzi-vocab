@@ -16,6 +16,7 @@ interface Store {
   addWord(input: WordInput): Promise<Word>;
   addWords(inputs: WordInput[]): Promise<void>;
   updateWord(word: Word): Promise<void>;
+  updateWords(words: Word[]): Promise<void>;
   deleteWord(id: string): Promise<void>;
   importWords(words: Word[], mode: ImportMode): Promise<{ added: number; skipped: number }>;
   /** Count one answered card toward today's stats and the streak. */
@@ -62,6 +63,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const updated: Word = { ...word, ...cleanInput(word), updatedAt: Date.now() };
     await db.putWord(updated);
     setWords((ws) => ws.map((w) => (w.id === updated.id ? updated : w)));
+  }, []);
+
+  /** Save several edited words in one transaction (bulk actions). */
+  const updateWords = useCallback(async (list: Word[]) => {
+    const now = Date.now();
+    const updated = list.map((w) => ({ ...w, ...cleanInput(w), updatedAt: now }));
+    await db.putWords(updated);
+    const byId = new Map(updated.map((w) => [w.id, w]));
+    setWords((ws) => ws.map((w) => byId.get(w.id) ?? w));
   }, []);
 
   const deleteWord = useCallback(async (id: string) => {
@@ -114,9 +124,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const value = useMemo<Store>(
     () => ({
       words, loading, error, streak, daily,
-      addWord, addWords, updateWord, deleteWord, importWords, recordReview,
+      addWord, addWords, updateWord, updateWords, deleteWord, importWords, recordReview,
     }),
-    [words, loading, error, streak, daily, addWord, addWords, updateWord, deleteWord, importWords, recordReview],
+    [words, loading, error, streak, daily, addWord, addWords, updateWord, updateWords, deleteWord, importWords, recordReview],
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

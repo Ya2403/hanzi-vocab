@@ -10,6 +10,8 @@ import { prefetchStrokes, writableChars } from '../lib/strokes';
 import { hanziDictCached, loadHanziDict } from '../lib/hanziDict';
 import { Segmented } from '../components/Segmented';
 import { BulkAdd } from '../components/BulkAdd';
+import { TatoebaBulk } from '../components/Sentences';
+import { corpusCached, loadCorpus } from '../lib/tatoeba';
 
 export function DataScreen() {
   const { words, streak, importWords } = useStore();
@@ -19,6 +21,8 @@ export function DataScreen() {
   const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   const [voiceOk, setVoiceOk] = useState(hasChineseVoice);
   const [bulk, setBulk] = useState(false);
+  const [tatoebaBulk, setTatoebaBulk] = useState(false);
+  const withoutExample = words.filter((w) => !w.example).length;
 
   useEffect(() => onVoicesChanged(() => setVoiceOk(hasChineseVoice())), []);
 
@@ -91,6 +95,10 @@ export function DataScreen() {
           Bulk add from text / AI output…
         </button>
         {bulk && <BulkAdd onClose={() => setBulk(false)} />}
+        <button className="btn block" onClick={() => setTatoebaBulk(true)} disabled={!withoutExample}>
+          Add Tatoeba sentences to words without one ({withoutExample})…
+        </button>
+        {tatoebaBulk && <TatoebaBulk onClose={() => setTatoebaBulk(false)} />}
         <input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={onFile} />
         {message && <p className={`hint ${message.kind === 'error' ? 'error' : 'ok'}`}>{message.text}</p>}
       </div>
@@ -139,11 +147,13 @@ export function DataScreen() {
 function OfflineData({ chars }: { chars: string[] }) {
   const unique = [...new Set(chars)];
   const [dictReady, setDictReady] = useState<boolean | null>(null);
+  const [sentencesReady, setSentencesReady] = useState<boolean | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
 
   useEffect(() => {
     hanziDictCached().then(setDictReady, () => setDictReady(false));
+    corpusCached().then(setSentencesReady, () => setSentencesReady(false));
   }, []);
 
   const download = async () => {
@@ -156,6 +166,13 @@ function OfflineData({ chars }: { chars: string[] }) {
     } catch {
       problems.push('character breakdowns');
     }
+    setProgress('Downloading example sentences…');
+    try {
+      await loadCorpus();
+      setSentencesReady(true);
+    } catch {
+      problems.push('example sentences');
+    }
     if (unique.length) {
       const { failed } = await prefetchStrokes(unique, (done, total) => setProgress(`Downloading strokes… ${done}/${total}`));
       if (failed.length) problems.push(`strokes for ${failed.slice(0, 12).join(' ')}${failed.length > 12 ? ' …' : ''}`);
@@ -164,7 +181,7 @@ function OfflineData({ chars }: { chars: string[] }) {
     setResult(
       problems.length
         ? { ok: false, text: `Couldn’t download ${problems.join(' and ')}. Check your connection and try again.` }
-        : { ok: true, text: `Saved: character breakdowns and strokes for ${unique.length} characters.` },
+        : { ok: true, text: `Saved: character breakdowns, example sentences, and strokes for ${unique.length} characters.` },
     );
   };
 
@@ -172,12 +189,13 @@ function OfflineData({ chars }: { chars: string[] }) {
     <div className="card form">
       <h2>Offline data</h2>
       <p className="muted small">
-        Character breakdowns (about 280 KB) and writing-practice strokes download the first time you use them, then stay on
-        this device. To use them offline (e.g. on your phone), download everything for your list now.
+        Character breakdowns, example sentences and writing-practice strokes download the first time you use them, then stay
+        on this device. To use them offline (e.g. on your phone), download everything for your list now.
       </p>
       <p className="small">
-        Character breakdowns:{' '}
-        {dictReady === null ? '…' : dictReady ? <span className="ok-text">saved ✓</span> : <span className="muted">not downloaded</span>}
+        Character breakdowns: <SavedState ready={dictReady} />
+        <br />
+        Example sentences (Tatoeba): <SavedState ready={sentencesReady} />
       </p>
       <button className="btn block" onClick={download} disabled={progress !== null}>
         {progress ?? `Download offline data (${unique.length} characters)`}
@@ -186,6 +204,9 @@ function OfflineData({ chars }: { chars: string[] }) {
     </div>
   );
 }
+
+const SavedState = ({ ready }: { ready: boolean | null }) =>
+  ready === null ? <>…</> : ready ? <span className="ok-text">saved ✓</span> : <span className="muted">not downloaded</span>;
 
 const BASE = import.meta.env.BASE_URL;
 const REPO = 'https://github.com/Ya2403/hanzi-vocab';
@@ -214,7 +235,18 @@ function About() {
           which come from Arphic Technology fonts.
         </li>
         <li>
+          <b>Example sentences</b> from <a href="https://tatoeba.org" target="_blank" rel="noreferrer">Tatoeba</a>, by its
+          contributors, licensed{' '}
+          <a href="https://creativecommons.org/licenses/by/2.0/fr/" target="_blank" rel="noreferrer">CC BY 2.0 FR</a>, via
+          the Mandarin–English pairs from{' '}
+          <a href="https://www.manythings.org/anki/" target="_blank" rel="noreferrer">manythings.org</a>. Modified: converted
+          to simplified Chinese, deduplicated and split into words. Each sentence links to its Tatoeba page, which lists its
+          authors.
+        </li>
+        <li>
           <b>Pinyin</b>: <a href="https://github.com/zh-lx/pinyin-pro" target="_blank" rel="noreferrer">pinyin-pro</a> (MIT).
+          Traditional → simplified conversion at build time:{' '}
+          <a href="https://github.com/nk2028/opencc-js" target="_blank" rel="noreferrer">opencc-js</a> (MIT).
         </li>
         <li>Built with React, Vite, idb and vite-plugin-pwa (MIT/ISC licenses).</li>
       </ul>

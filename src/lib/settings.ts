@@ -13,6 +13,8 @@ export interface Settings {
   writingOutline: boolean;
   /** Writing mode: Hanzi Writer's stroke-by-stroke quiz, or draw the whole character then check. */
   writingStyle: 'strokes' | 'free';
+  /** Sentence mode: your own example sentences only, or also Tatoeba's. */
+  sentenceSource: 'mine' | 'both';
   /** A word becomes a leech after this many lapses. */
   leechThreshold: number;
   /** Pinyin on practice question sides and under example sentences. */
@@ -36,6 +38,7 @@ const defaults: Settings = {
   writingOutline: false,
   breakdownOpen: false,
   writingStyle: 'strokes',
+  sentenceSource: 'both',
   leechThreshold: 5,
   showPinyin: true,
   pinyinAfterAnswer: true,

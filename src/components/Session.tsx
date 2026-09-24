@@ -10,6 +10,7 @@ import { FreeDraw } from './FreeDraw';
 import { updateSettings, usePinyinVisibility, useSettings } from '../lib/settings';
 import { LeechPrompt } from './LeechPrompt';
 import { Typing } from './Typing';
+import { SentenceCloze } from './SentenceCloze';
 import { Icon } from './Icon';
 
 interface Props {
@@ -158,6 +159,8 @@ export function Session({ title, words: initialWords, mode, direction, updateSch
         <Flashcard key={step} word={word} direction={current.dir} graded={updateSchedule} onAnswer={answer} />
       ) : mode === 'choice' ? (
         <MultipleChoice key={step} word={word} allWords={allWords} direction={current.dir} onAnswer={answer} />
+      ) : mode === 'sentence' ? (
+        <SentenceCloze key={step} word={word} onAnswer={answer} onSkip={skip} />
       ) : mode === 'typing' ? (
         <Typing key={step} word={word} direction={current.dir} onAnswer={answer} />
       ) : (

@@ -20,7 +20,7 @@ export function SessionOptions({
   onDirection(d: Direction): void;
   totalWords: number;
 }) {
-  const { writingOutline, writingStyle } = useSettings();
+  const { writingOutline, writingStyle, sentenceSource } = useSettings();
   return (
     <>
       <Segmented
@@ -32,12 +32,31 @@ export function SessionOptions({
           { value: 'choice', label: 'Choice' },
           { value: 'typing', label: 'Typing' },
           { value: 'writing', label: 'Writing' },
+          { value: 'sentence', label: 'Sentence' },
         ]}
       />
       {!modeAvailable(mode, totalWords) && (
         <p className="hint warn">Multiple choice needs at least {MIN_CHOICE_WORDS} words in your list.</p>
       )}
-      {mode === 'writing' ? (
+      {mode === 'sentence' ? (
+        <>
+          <Segmented
+            label="Sentence source"
+            value={sentenceSource}
+            onChange={(v) => updateSettings({ sentenceSource: v })}
+            options={[
+              { value: 'mine', label: 'My sentences only' },
+              { value: 'both', label: 'Mine + Tatoeba' },
+            ]}
+          />
+          <p className="hint">
+            A sentence with the word blanked out; type the missing word (hanzi or pinyin).
+            {sentenceSource === 'both'
+              ? ' Tatoeba sentences are chosen by how many of their words you know, and rotate so you don’t just memorize one.'
+              : ' Only words with an example sentence can be practiced.'}
+          </p>
+        </>
+      ) : mode === 'writing' ? (
         <>
           <Segmented
             label="Writing style"

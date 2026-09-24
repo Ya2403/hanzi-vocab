@@ -100,7 +100,9 @@ export function Flashcard({ word, direction, graded, onAnswer }: Props) {
             </div>
             {direction === 'zh-en' && <div className="answer-meaning">{word.meaning}</div>}
             <NotesBox notes={word.notes} />
-            {word.example && <ExampleSentence text={word.example} pinyinVisible={pv.question} />}
+            {word.example && (
+              <ExampleSentence text={word.example} pinyinVisible={pv.question} translation={word.exampleTranslation} tatoebaId={word.exampleRef} />
+            )}
             <Breakdown word={word} collapsible pinyinVisible={pinyinShown} />
           </div>
         ) : (

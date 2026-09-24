@@ -21,3 +21,18 @@ npm run build:dict -- path/to/dictionary.txt
 ```
 
 This data file is covered by the LGPL, as above. The rest of the app's code isn't.
+
+## tatoeba-cmn.json
+
+Mandarin example sentences with English translations, used by **Find sentences**, the bulk "Add Tatoeba sentences" action and Sentence mode.
+
+- **Source:** the Mandarin–English pairs `cmn-eng.zip` from [manythings.org/anki](https://www.manythings.org/anki/), which are taken from [Tatoeba](https://tatoeba.org).
+- **License:** [CC BY 2.0 FR](https://creativecommons.org/licenses/by/2.0/fr/). Attribution: the sentences and translations are by Tatoeba's contributors. Each entry keeps its Tatoeba sentence IDs, and the app links every sentence it shows to `https://tatoeba.org/sentences/show/<id>`, which lists the authors.
+- **Modifications:** [`scripts/build-sentences.mjs`](../../scripts/build-sentences.mjs) converts traditional characters to simplified ([opencc-js](https://github.com/nk2028/opencc-js)), drops duplicate sentences (keeping the first translation) and sentences over 40 characters, and splits each sentence into words with `Intl.Segmenter('zh', { granularity: 'word' })`.
+- **Format:** `{ _meta, s: [[segmented, english, tatoebaChineseId], …] }`, where `segmented` is the sentence with words separated by `|`.
+
+To regenerate, first download `cmn-eng.zip` in a browser (the site blocks scripted downloads), then run:
+
+```bash
+npm run build:sentences -- path/to/cmn-eng.zip
+```

@@ -62,6 +62,8 @@ function normalizeWord(raw: unknown): Word | null {
     pinyin: str(r.pinyin) || toPinyin(hanzi),
     meaning,
     example: str(r.example) || undefined,
+    exampleTranslation: str(r.exampleTranslation) || undefined,
+    exampleRef: typeof r.exampleRef === 'number' ? r.exampleRef : undefined,
     notes: str(r.notes) || undefined,
     tags: normalizeTags(tags),
     createdAt: num(r.createdAt, now),

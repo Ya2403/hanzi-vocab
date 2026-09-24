@@ -8,6 +8,7 @@ import type { Word } from '../lib/types';
 import { Modal } from './Modal';
 import { SpeakButton } from './SpeakButton';
 import { Icon } from './Icon';
+import { FindSentences } from './Sentences';
 
 export function WordForm({ word, onClose }: { word?: Word; onClose(): void }) {
   const { words, addWord, updateWord } = useStore();
@@ -17,6 +18,12 @@ export function WordForm({ word, onClose }: { word?: Word; onClose(): void }) {
   const [pinyinAuto, setPinyinAuto] = useState(!word || word.pinyin === toPinyin(word.hanzi));
   const [meaning, setMeaning] = useState(word?.meaning ?? '');
   const [example, setExample] = useState(word?.example ?? '');
+  // Set when the example came from Tatoeba; dropped as soon as the text is edited by hand.
+  const [exampleSource, setExampleSource] = useState<{ translation?: string; ref?: number }>({
+    translation: word?.exampleTranslation,
+    ref: word?.exampleRef,
+  });
+  const [finding, setFinding] = useState(false);
   const [notes, setNotes] = useState(word?.notes ?? '');
   // The stored version (progress may change while the dialog is open).
   const live = word && words.find((w) => w.id === word.id);
@@ -63,7 +70,16 @@ export function WordForm({ word, onClose }: { word?: Word; onClose(): void }) {
     }
     setSaving(true);
     try {
-      const input = { hanzi, pinyin: pinyin.trim() || toPinyin(hanzi), meaning, example, notes, tags };
+      const input = {
+        hanzi,
+        pinyin: pinyin.trim() || toPinyin(hanzi),
+        meaning,
+        example,
+        exampleTranslation: exampleSource.translation,
+        exampleRef: exampleSource.ref,
+        notes,
+        tags,
+      };
       // Merge onto the stored word so progress changes made in this dialog aren't overwritten.
       if (word) await updateWord({ ...(live ?? word), ...input });
       else await addWord(input);
@@ -116,9 +132,36 @@ export function WordForm({ word, onClose }: { word?: Word; onClose(): void }) {
           <span className="field-label">
             Example sentence <span className="optional">optional</span>
           </span>
-          <textarea className="input" rows={2} value={example} onChange={(e) => setExample(e.target.value)} lang="zh-CN" placeholder="我在学汉字。" />
+          <textarea
+            className="input"
+            rows={2}
+            value={example}
+            onChange={(e) => {
+              setExample(e.target.value);
+              setExampleSource({});
+            }}
+            lang="zh-CN"
+            placeholder="我在学汉字。"
+          />
           {example.trim() && <span className="hint">{toPinyin(example)}</span>}
+          {exampleSource.translation && <span className="hint">{exampleSource.translation}</span>}
+          {!finding && (
+            <button type="button" className="link-btn align-start" onClick={() => setFinding(true)} disabled={!hanzi.trim()}>
+              Find sentences
+            </button>
+          )}
         </label>
+        {finding && (
+          <FindSentences
+            hanzi={hanzi}
+            onClose={() => setFinding(false)}
+            onPick={(m) => {
+              setExample(m.sentence.zh);
+              setExampleSource({ translation: m.sentence.en, ref: m.sentence.zhId });
+              setFinding(false);
+            }}
+          />
+        )}
 
         <label className="field">
           <span className="field-label">

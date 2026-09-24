@@ -1436,6 +1436,156 @@ button.part:hover {
   font-weight: 600;
 }
 
+/* ---------- Sentences (Tatoeba, cloze) ---------- */
+
+.segmented {
+  flex-wrap: wrap;
+}
+
+.segmented button {
+  min-width: 4.2rem;
+}
+
+.align-start {
+  align-self: flex-start;
+}
+
+mark.target {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-radius: 4px;
+  padding: 0 0.1em;
+}
+
+.example-translation {
+  margin-top: 0.2rem;
+  color: var(--text);
+}
+
+.tatoeba-credit {
+  display: inline-block;
+  margin-top: 0.2rem;
+  font-size: 0.7rem;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.tatoeba-credit:hover {
+  text-decoration: underline;
+}
+
+.find-sentences {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.sentence-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-height: 340px;
+  overflow-y: auto;
+}
+
+.sentence-option,
+.bulk-sentence {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.15rem;
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  text-align: left;
+}
+
+.bulk-sentence {
+  flex-direction: row;
+  gap: 0.6rem;
+  align-items: flex-start;
+  cursor: pointer;
+}
+
+.bulk-sentence input {
+  margin-top: 0.25rem;
+  accent-color: var(--accent);
+}
+
+.bulk-sentence-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.sentence-list li.off {
+  opacity: 0.5;
+}
+
+.sentence-option:hover {
+  border-color: var(--accent);
+}
+
+.sentence-zh {
+  font-size: 1.1rem;
+}
+
+.sentence-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.6rem;
+}
+
+.known-label {
+  padding: 0.05rem 0.45rem;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.known-label.all {
+  background: var(--good-soft);
+  color: var(--good);
+}
+
+.bulk-sentences {
+  max-height: 50vh;
+}
+
+.cloze-card {
+  gap: 0.45rem;
+}
+
+.cloze-sentence {
+  font-size: 1.5rem;
+  line-height: 1.5;
+}
+
+.cloze-blank {
+  display: inline-block;
+  min-width: 2em;
+  margin: 0 0.1em;
+  border-bottom: 2px solid var(--accent);
+  color: transparent;
+}
+
+.cloze-translation {
+  font-weight: 500;
+}
+
 /* ---------- Pinyin visibility ---------- */
 
 .pinyin-toggle {

@@ -24,6 +24,10 @@ export interface Word {
   pinyin: string;
   meaning: string;
   example?: string;
+  /** English translation of the example (set when it came from Tatoeba). */
+  exampleTranslation?: string;
+  /** Tatoeba sentence id of the example, for attribution. */
+  exampleRef?: number;
   /** Free-form notes or a memory trick (mnemonic). */
   notes?: string;
   tags: string[];
@@ -33,9 +37,9 @@ export interface Word {
 }
 
 /** Fields the user edits directly. */
-export type WordInput = Pick<Word, 'hanzi' | 'pinyin' | 'meaning' | 'example' | 'notes' | 'tags'>;
+export type WordInput = Pick<Word, 'hanzi' | 'pinyin' | 'meaning' | 'example' | 'exampleTranslation' | 'exampleRef' | 'notes' | 'tags'>;
 
-export type PracticeMode = 'flashcards' | 'choice' | 'typing' | 'writing';
+export type PracticeMode = 'flashcards' | 'choice' | 'typing' | 'writing' | 'sentence';
 /** zh-en: show Chinese, recall meaning. en-zh: show meaning, recall Chinese. */
 export type CardDirection = 'zh-en' | 'en-zh';
 export type Direction = CardDirection | 'mixed';

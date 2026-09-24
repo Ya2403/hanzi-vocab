@@ -14,6 +14,9 @@ export function cleanInput(input: WordInput): WordInput {
     pinyin: input.pinyin.trim().replace(/\s+/g, ' '),
     meaning: input.meaning.trim(),
     example: example || undefined,
+    // Translation/source only make sense alongside the example they belong to.
+    exampleTranslation: example ? input.exampleTranslation?.trim() || undefined : undefined,
+    exampleRef: example ? input.exampleRef : undefined,
     notes: notes || undefined,
     tags: normalizeTags(input.tags),
   };
