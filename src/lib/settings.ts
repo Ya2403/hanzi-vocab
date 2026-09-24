@@ -11,6 +11,8 @@ export interface Settings {
   practiceDirection: Direction;
   /** Writing mode: show a faint outline to trace instead of writing from memory. */
   writingOutline: boolean;
+  /** Writing mode: Hanzi Writer's stroke-by-stroke quiz, or draw the whole character then check. */
+  writingStyle: 'strokes' | 'free';
   /** Whether the Breakdown section on flashcard backs is expanded. */
   breakdownOpen: boolean;
 }
@@ -25,6 +27,7 @@ const defaults: Settings = {
   practiceDirection: 'mixed',
   writingOutline: false,
   breakdownOpen: false,
+  writingStyle: 'strokes',
 };
 
 let current: Settings = load();

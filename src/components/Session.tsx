@@ -6,6 +6,8 @@ import type { CardDirection, Direction, PracticeMode, Word } from '../lib/types'
 import { Flashcard } from './Flashcard';
 import { MultipleChoice } from './MultipleChoice';
 import { Writing } from './Writing';
+import { FreeDraw } from './FreeDraw';
+import { useSettings } from '../lib/settings';
 import { Typing } from './Typing';
 import { Icon } from './Icon';
 
@@ -33,6 +35,7 @@ const resolveDir = (d: Direction): CardDirection => (d === 'mixed' ? (Math.rando
  */
 export function Session({ title, words: initialWords, mode, direction, updateSchedule: initialUpdate, onExit }: Props) {
   const { words: allWords, updateWord, recordReview } = useStore();
+  const { writingStyle } = useSettings();
   const [pool, setPool] = useState(initialWords);
   const [updateSchedule, setUpdateSchedule] = useState(initialUpdate);
   const [queue, setQueue] = useState<Step[]>(() => initialWords.map((w) => ({ id: w.id, dir: resolveDir(direction) })));
@@ -136,7 +139,12 @@ export function Session({ title, words: initialWords, mode, direction, updateSch
       ) : mode === 'typing' ? (
         <Typing key={step} word={word} direction={current.dir} onAnswer={answer} />
       ) : (
-        <Writing key={step} word={word} onAnswer={answer} onSkip={skip} />
+        // Switching style (in-card toggle) remounts the card for the same word.
+        writingStyle === 'free' ? (
+          <FreeDraw key={`free-${step}`} word={word} onAnswer={answer} onSkip={skip} />
+        ) : (
+          <Writing key={`strokes-${step}`} word={word} onAnswer={answer} onSkip={skip} />
+        )
       )}
     </div>
   );

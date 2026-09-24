@@ -1436,6 +1436,160 @@ button.part:hover {
   font-weight: 600;
 }
 
+/* ---------- Free draw ---------- */
+
+.style-toggle {
+  display: flex;
+  justify-content: center;
+  gap: 2px;
+  padding: 3px;
+  margin: 0 auto;
+  border-radius: 999px;
+  background: var(--surface-2);
+  width: fit-content;
+}
+
+.style-toggle button {
+  padding: 0.3rem 0.85rem;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.style-toggle button.active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+
+.draw-pad {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.draw-pad.active {
+  cursor: crosshair;
+}
+
+.user-stroke {
+  fill: none;
+  stroke: var(--text);
+  stroke-width: 7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.user-stroke.matched {
+  stroke: var(--text);
+  opacity: 0.75;
+}
+
+.user-stroke.extra {
+  stroke: var(--bad);
+  opacity: 0.9;
+}
+
+.ref-outline path {
+  fill: var(--border);
+  opacity: 0.6;
+}
+
+.ref-ok {
+  fill: var(--border);
+}
+
+.ref-missing {
+  fill: var(--easy);
+  opacity: 0.55;
+}
+
+.board-animation {
+  position: absolute;
+  inset: 0;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.free-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: min(300px, 100%);
+  margin: 0 auto;
+}
+
+.free-actions .row {
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+.free-result {
+  /* Not sticky like other feedback bars: it must not cover the overlay on the board. */
+  position: static;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.35rem;
+}
+
+.free-score {
+  font-size: 1.05rem;
+}
+
+.free-notes {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.9rem;
+  color: var(--text);
+}
+
+.swatch {
+  display: inline-block;
+  width: 14px;
+  height: 6px;
+  margin-right: 0.3rem;
+  border-radius: 3px;
+  vertical-align: middle;
+}
+
+.swatch.matched {
+  background: var(--text);
+  opacity: 0.75;
+}
+
+.swatch.extra {
+  background: var(--bad);
+}
+
+.swatch.missing {
+  background: var(--easy);
+  opacity: 0.7;
+}
+
+.free-buttons {
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.free-result .btn {
+  margin-left: 0;
+}
+
 /* ---------- Writing ---------- */
 
 .writing-prompt {

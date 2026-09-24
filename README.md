@@ -10,6 +10,7 @@ A Chinese vocabulary trainer: React + Vite + TypeScript, installable as a PWA, w
 - **Character breakdown**: tap a word to open its detail view, or expand "Breakdown" on a flashcard back. For each character you see its components with their meanings, the radical, and the etymology, e.g. 好 = 女 + 子, "A woman 女 with a son 子". For meaning + sound characters, the parts are labelled (妈: 女 gives the meaning, 马 mǎ gives the sound). Tap a component to see other words in your list that contain it. The data, from Make Me a Hanzi, loads the first time it's needed and is cached for offline use.
 - **Categories**: Review and Practice can both be limited to one tag. Selecting a tag in the word list shows a "Practice this tag" shortcut.
 - **Writing**: draw each character stroke by stroke with [Hanzi Writer](https://hanziwriter.org), which checks every stroke. After 3 misses on a stroke you get a hint. "Show strokes" animates the stroke order, and tracing mode shows a faint outline to draw over. The grade is automatic: no mistakes = Good, some mistakes or the demo = Hard, Reveal = Again. Stroke data comes from the jsDelivr CDN, one character at a time, and is kept in Cache Storage. Stats & data has a button to download it for your whole list, for offline use.
+- **Free draw** (second writing style; switch in the session options or with the toggle on the card): draw the whole character in any order, then tap **Check**. Undo stroke and Clear are available. Your strokes are paired with the reference stroke medians regardless of order (Hungarian matching on shape, position, direction and length, after aligning your drawing to the reference). You get a percentage and **Correct / Close / Wrong**, and your drawing is shown over the correct character, with missing strokes in blue and extra or wrong strokes in red. Stroke order isn't graded, but you get a note if it differs a lot. All thresholds live in `FREE_DRAW_CONFIG` in `src/lib/freeDraw.ts`, with the tuning results next to it.
 - **Free practice**: flashcards or multiple choice, 中→EN / EN→中 / mixed, filtered by tag. It doesn't change your review schedule.
 - **Audio**: Web Speech API with a `zh-CN` voice. It can play automatically when an answer is revealed, and the speech rate is adjustable.
 - **Streak**: any answered card counts for the day.
@@ -24,6 +25,7 @@ npm install
 npm run dev       # http://localhost:5173
 npm run build     # type-check + production build with service worker
 npm run preview   # serve the production build (test PWA install/offline here)
+npm test          # unit tests (Vitest)
 ```
 
 ## Structure

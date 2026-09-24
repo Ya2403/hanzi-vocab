@@ -20,7 +20,7 @@ export function SessionOptions({
   onDirection(d: Direction): void;
   totalWords: number;
 }) {
-  const { writingOutline } = useSettings();
+  const { writingOutline, writingStyle } = useSettings();
   return (
     <>
       <Segmented
@@ -39,12 +39,23 @@ export function SessionOptions({
       )}
       {mode === 'writing' ? (
         <>
+          <Segmented
+            label="Writing style"
+            value={writingStyle}
+            onChange={(s) => updateSettings({ writingStyle: s })}
+            options={[
+              { value: 'strokes', label: 'Stroke by stroke' },
+              { value: 'free', label: 'Free draw' },
+            ]}
+          />
           <label className="toggle">
             <input type="checkbox" checked={writingOutline} onChange={(e) => updateSettings({ writingOutline: e.target.checked })} />
             <span>Tracing mode: show a faint outline of the character</span>
           </label>
           <p className="hint">
-            You see the meaning and pinyin, then draw each character stroke by stroke. After 3 misses on a stroke, a hint appears.
+            {writingStyle === 'free'
+              ? 'Draw the whole character in any order, then tap Check. You get a score, with missing and extra strokes highlighted.'
+              : 'Draw each character stroke by stroke; each stroke is checked as you go. After 3 misses on a stroke, a hint appears.'}
           </p>
         </>
       ) : (
