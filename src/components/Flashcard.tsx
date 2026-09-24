@@ -5,6 +5,7 @@ import { speak } from '../lib/speech';
 import { toPinyin } from '../lib/pinyin';
 import type { CardDirection, Word } from '../lib/types';
 import { SpeakButton } from './SpeakButton';
+import { Breakdown } from './Breakdown';
 
 interface Props {
   word: Word;
@@ -38,6 +39,8 @@ export function Flashcard({ word, direction, graded, onAnswer }: Props) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.repeat) return;
+      // Leave keys alone while a popup (e.g. "Words with X") is open.
+      if (document.querySelector('.modal-backdrop')) return;
       if (!flipped && (e.key === ' ' || e.key === 'Enter')) {
         e.preventDefault();
         flip();
@@ -84,6 +87,7 @@ export function Flashcard({ word, direction, graded, onAnswer }: Props) {
                 <div className="muted small">{toPinyin(word.example)}</div>
               </div>
             )}
+            <Breakdown word={word} collapsible />
           </div>
         ) : (
           <div className="tap-hint">Tap or press Space to reveal</div>

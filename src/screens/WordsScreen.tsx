@@ -9,6 +9,7 @@ import { Icon } from '../components/Icon';
 import { SpeakButton } from '../components/SpeakButton';
 import { WordForm } from '../components/WordForm';
 import { BulkAdd } from '../components/BulkAdd';
+import { WordDetail } from '../components/WordDetail';
 
 type Sort = 'newest' | 'oldest' | 'due' | 'pinyin';
 
@@ -19,6 +20,7 @@ export function WordsScreen() {
   const [sort, setSort] = useState<Sort>('newest');
   const [editing, setEditing] = useState<Word | 'new' | null>(null);
   const [bulk, setBulk] = useState(false);
+  const [detail, setDetail] = useState<Word | null>(null);
 
   const tagCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -124,7 +126,7 @@ export function WordsScreen() {
 
           <ul className="word-list">
             {visible.map((w) => (
-              <WordRow key={w.id} word={w} onEdit={() => setEditing(w)} onDelete={() => remove(w)} />
+              <WordRow key={w.id} word={w} onOpen={() => setDetail(w)} onEdit={() => setEditing(w)} onDelete={() => remove(w)} />
             ))}
           </ul>
           {visible.length === 0 && <p className="empty">No words match.</p>}
@@ -135,13 +137,23 @@ export function WordsScreen() {
         <Icon name="plus" size={26} />
       </button>
 
+      {detail && (
+        <WordDetail
+          word={detail}
+          onClose={() => setDetail(null)}
+          onEdit={(w) => {
+            setDetail(null);
+            setEditing(w);
+          }}
+        />
+      )}
       {editing && <WordForm word={editing === 'new' ? undefined : editing} onClose={() => setEditing(null)} />}
       {bulk && <BulkAdd onClose={() => setBulk(false)} />}
     </section>
   );
 }
 
-function WordRow({ word, onEdit, onDelete }: { word: Word; onEdit(): void; onDelete(): void }) {
+function WordRow({ word, onOpen, onEdit, onDelete }: { word: Word; onOpen(): void; onEdit(): void; onDelete(): void }) {
   const status = isNew(word) ? (
     <span className="status new">new</span>
   ) : isDue(word) ? (
@@ -152,7 +164,7 @@ function WordRow({ word, onEdit, onDelete }: { word: Word; onEdit(): void; onDel
 
   return (
     <li className="word-row card">
-      <div className="word-main" onClick={onEdit}>
+      <div className="word-main" onClick={onOpen}>
         <div className="word-head">
           <span className="hanzi" lang="zh-CN">{word.hanzi}</span>
           <span className="pinyin">{word.pinyin}</span>

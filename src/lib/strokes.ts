@@ -1,4 +1,5 @@
 import type { CharacterJson, CharDataLoaderFn } from 'hanzi-writer';
+import { cachedFetchJson, HttpError } from './offlineCache';
 
 /** Hanzi Writer stroke data (~9,000 characters), one small JSON file per character. */
 const dataUrl = (char: string) => `https://cdn.jsdelivr.net/npm/hanzi-writer-data@2.0.1/${encodeURIComponent(char)}.json`;
@@ -11,23 +12,13 @@ export const writableChars = (text: string): string[] => [...text].filter((c) =>
 
 const inFlight = new Map<string, Promise<CharacterJson>>();
 
-async function openCache(): Promise<Cache | null> {
-  try {
-    return 'caches' in window ? await caches.open(CACHE_NAME) : null;
-  } catch {
-    return null;
-  }
-}
-
 async function fetchStrokeData(char: string): Promise<CharacterJson> {
-  const url = dataUrl(char);
-  const cache = await openCache();
-  const hit = await cache?.match(url);
-  if (hit) return hit.json();
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(res.status === 404 ? `No stroke data for “${char}”.` : `Download failed (${res.status}).`);
-  await cache?.put(url, res.clone()).catch(() => {});
-  return res.json();
+  try {
+    return await cachedFetchJson<CharacterJson>(dataUrl(char), CACHE_NAME);
+  } catch (e) {
+    if (e instanceof HttpError && e.status === 404) throw new Error(`No stroke data for “${char}”.`);
+    throw e;
+  }
 }
 
 /** Cache-first load; failed loads are forgotten so they can be retried. */

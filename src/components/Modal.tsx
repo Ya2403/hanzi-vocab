@@ -1,9 +1,16 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { Icon } from './Icon';
 
 export function Modal({ title, onClose, children }: { title: string; onClose(): void; children: ReactNode }) {
+  const backdropRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    // With stacked modals, Escape closes only the topmost one.
+    const onKey = (e: KeyboardEvent) => {
+      const all = document.querySelectorAll('.modal-backdrop');
+      if (e.key === 'Escape' && all[all.length - 1] === backdropRef.current) onClose();
+    };
     window.addEventListener('keydown', onKey);
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -13,8 +20,9 @@ export function Modal({ title, onClose, children }: { title: string; onClose(): 
     };
   }, [onClose]);
 
-  return (
-    <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+  // Portal to <body> so modals opened from inside cards aren't clipped or styled by their container.
+  return createPortal(
+    <div ref={backdropRef} className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal" role="dialog" aria-modal="true" aria-label={title}>
         <header className="modal-header">
           <h2>{title}</h2>
@@ -24,6 +32,7 @@ export function Modal({ title, onClose, children }: { title: string; onClose(): 
         </header>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

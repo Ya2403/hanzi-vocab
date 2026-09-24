@@ -1,13 +1,14 @@
 {
   "name": "hanzi-vocab",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:dict": "node scripts/build-hanzi-dict.mjs"
   },
   "dependencies": {
     "hanzi-writer": "^3.7.3",

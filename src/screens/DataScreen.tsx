@@ -7,6 +7,7 @@ import { liveStreak } from '../lib/streak';
 import { updateSettings, useSettings } from '../lib/settings';
 import { hasChineseVoice, onVoicesChanged, speak, speechSupported } from '../lib/speech';
 import { prefetchStrokes, writableChars } from '../lib/strokes';
+import { hanziDictCached, loadHanziDict } from '../lib/hanziDict';
 import { Segmented } from '../components/Segmented';
 import { BulkAdd } from '../components/BulkAdd';
 
@@ -92,7 +93,7 @@ export function DataScreen() {
         {message && <p className={`hint ${message.kind === 'error' ? 'error' : 'ok'}`}>{message.text}</p>}
       </div>
 
-      <StrokeDownload chars={words.flatMap((w) => writableChars(w.hanzi))} />
+      <OfflineData chars={words.flatMap((w) => writableChars(w.hanzi))} />
 
       <div className="card form">
         <h2>Audio</h2>
@@ -124,38 +125,95 @@ export function DataScreen() {
           </>
         )}
       </div>
+
+      <About />
     </section>
   );
 }
 
-function StrokeDownload({ chars }: { chars: string[] }) {
+/** Stroke data (per character) and the character dictionary load on demand; this fetches them up front. */
+function OfflineData({ chars }: { chars: string[] }) {
   const unique = [...new Set(chars)];
-  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
-  const [result, setResult] = useState<string | null>(null);
+  const [dictReady, setDictReady] = useState<boolean | null>(null);
+  const [progress, setProgress] = useState<string | null>(null);
+  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+
+  useEffect(() => {
+    hanziDictCached().then(setDictReady, () => setDictReady(false));
+  }, []);
 
   const download = async () => {
     setResult(null);
-    setProgress({ done: 0, total: unique.length });
-    const { failed } = await prefetchStrokes(unique, (done, total) => setProgress({ done, total }));
+    const problems: string[] = [];
+    setProgress('Downloading character breakdowns…');
+    try {
+      await loadHanziDict();
+      setDictReady(true);
+    } catch {
+      problems.push('character breakdowns');
+    }
+    if (unique.length) {
+      const { failed } = await prefetchStrokes(unique, (done, total) => setProgress(`Downloading strokes… ${done}/${total}`));
+      if (failed.length) problems.push(`strokes for ${failed.slice(0, 12).join(' ')}${failed.length > 12 ? ' …' : ''}`);
+    }
     setProgress(null);
     setResult(
-      failed.length
-        ? `Saved ${unique.length - failed.length} characters. Couldn’t get: ${failed.slice(0, 12).join(' ')}${failed.length > 12 ? ' …' : ''}`
-        : `All ${unique.length} characters are saved for offline writing.`,
+      problems.length
+        ? { ok: false, text: `Couldn’t download ${problems.join(' and ')}. Check your connection and try again.` }
+        : { ok: true, text: `Saved: character breakdowns and strokes for ${unique.length} characters.` },
     );
   };
 
   return (
     <div className="card form">
-      <h2>Writing practice</h2>
+      <h2>Offline data</h2>
       <p className="muted small">
-        Stroke data is downloaded per character the first time you write it, then kept on this device. To practise writing
-        offline (e.g. on your phone), download it for your whole list now.
+        Character breakdowns (about 280 KB) and writing-practice strokes download the first time you use them, then stay on
+        this device. To use them offline (e.g. on your phone), download everything for your list now.
       </p>
-      <button className="btn block" onClick={download} disabled={!unique.length || progress !== null}>
-        {progress ? `Downloading… ${progress.done}/${progress.total}` : `Download stroke data (${unique.length} characters)`}
+      <p className="small">
+        Character breakdowns:{' '}
+        {dictReady === null ? '…' : dictReady ? <span className="ok-text">saved ✓</span> : <span className="muted">not downloaded</span>}
+      </p>
+      <button className="btn block" onClick={download} disabled={progress !== null}>
+        {progress ?? `Download offline data (${unique.length} characters)`}
       </button>
-      {result && <p className="hint ok">{result}</p>}
+      {result && <p className={`hint ${result.ok ? 'ok' : 'error'}`}>{result.text}</p>}
+    </div>
+  );
+}
+
+const BASE = import.meta.env.BASE_URL;
+const REPO = 'https://github.com/Ya2403/hanzi-vocab';
+
+function About() {
+  return (
+    <div className="card about">
+      <h2>About &amp; credits</h2>
+      <p className="small">
+        Hanzi Vocab v{__APP_VERSION__} · <a href={REPO} target="_blank" rel="noreferrer">source code</a>
+      </p>
+      <ul className="credits small">
+        <li>
+          <b>Character breakdowns</b> come from{' '}
+          <a href="https://github.com/skishore/makemeahanzi" target="_blank" rel="noreferrer">Make Me a Hanzi</a> by Shaunak
+          Kishore (<code>dictionary.txt</code>, derived from Unihan and CJKlib). It’s licensed under the{' '}
+          <a href={`${BASE}licenses/LGPL-3.0.txt`} target="_blank" rel="noreferrer">GNU LGPL v3</a> or later (which builds on
+          the <a href={`${BASE}licenses/GPL-3.0.txt`} target="_blank" rel="noreferrer">GNU GPL v3</a>). See the{' '}
+          <a href={`${BASE}licenses/makemeahanzi-COPYING.txt`} target="_blank" rel="noreferrer">upstream notice</a>. This app
+          uses a <b>modified version</b>, converted to compact JSON by{' '}
+          <a href={`${REPO}/blob/main/scripts/build-hanzi-dict.mjs`} target="_blank" rel="noreferrer">this script</a>.
+        </li>
+        <li>
+          <b>Stroke order &amp; writing</b>: <a href="https://hanziwriter.org" target="_blank" rel="noreferrer">Hanzi Writer</a>{' '}
+          by David Chanin (MIT). Stroke data: hanzi-writer-data (Arphic Public License), derived from Make Me a Hanzi’s graphics,
+          which come from Arphic Technology fonts.
+        </li>
+        <li>
+          <b>Pinyin</b>: <a href="https://github.com/zh-lx/pinyin-pro" target="_blank" rel="noreferrer">pinyin-pro</a> (MIT).
+        </li>
+        <li>Built with React, Vite, idb and vite-plugin-pwa (MIT/ISC licenses).</li>
+      </ul>
     </div>
   );
 }

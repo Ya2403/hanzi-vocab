@@ -1217,6 +1217,225 @@ input[type='range'] {
   font-size: 1.8rem;
 }
 
+/* ---------- Breakdown ---------- */
+
+.breakdown {
+  width: 100%;
+  margin-top: 0.75rem;
+  text-align: left;
+  user-select: text;
+}
+
+.breakdown h3 {
+  margin: 0 0 0.5rem;
+}
+
+details.breakdown {
+  border-top: 1px dashed var(--border);
+  padding-top: 0.5rem;
+}
+
+details.breakdown > summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--accent);
+  list-style-position: inside;
+}
+
+.char-breakdown {
+  padding: 0.6rem 0;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.char-breakdown:first-of-type {
+  border-top: 0;
+}
+
+.char-breakdown p {
+  margin: 0;
+}
+
+.char-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.char-big {
+  font-size: 1.8rem;
+  line-height: 1.1;
+  font-family: var(--font-zh);
+}
+
+.char-def {
+  display: inline;
+}
+
+.parts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.part {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0.6rem 0.35rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  text-align: left;
+  font-size: 0.82rem;
+}
+
+button.part:hover {
+  border-color: var(--accent);
+}
+
+.part.unknown {
+  border-style: dashed;
+}
+
+.part-char {
+  font-size: 1.4rem;
+  line-height: 1;
+  font-family: var(--font-zh);
+}
+
+.part-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.role {
+  padding: 0.05rem 0.4rem;
+  border-radius: 6px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.role.meaning {
+  background: var(--good-soft);
+  color: var(--good);
+}
+
+.role.sound {
+  background: color-mix(in srgb, var(--easy) 15%, var(--surface));
+  color: var(--easy);
+}
+
+.inline-part {
+  padding: 0 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  font-family: var(--font-zh);
+  font-size: 1rem;
+}
+
+.etymology .ety-type {
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.breakdown-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+}
+
+.component-words li {
+  padding: 0;
+}
+
+.component-word {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 0;
+  background: none;
+  text-align: left;
+}
+
+.component-word:hover {
+  background: var(--surface-2);
+}
+
+.component-words li:not(:has(button)) {
+  padding: 0.45rem 0.75rem;
+}
+
+/* ---------- Word detail ---------- */
+
+.word-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.word-detail .link-btn {
+  align-self: flex-start;
+}
+
+.detail-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.detail-hanzi {
+  font-size: 3rem;
+  line-height: 1.1;
+}
+
+.detail-meaning {
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.detail-progress {
+  padding: 0.5rem 0.75rem;
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.danger-text {
+  color: var(--bad);
+  margin-right: auto;
+}
+
+/* ---------- About ---------- */
+
+.about a {
+  color: var(--accent);
+}
+
+.credits {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.ok-text {
+  color: var(--good);
+  font-weight: 600;
+}
+
 /* ---------- Writing ---------- */
 
 .writing-prompt {

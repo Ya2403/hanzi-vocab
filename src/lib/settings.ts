@@ -11,6 +11,8 @@ export interface Settings {
   practiceDirection: Direction;
   /** Writing mode: show a faint outline to trace instead of writing from memory. */
   writingOutline: boolean;
+  /** Whether the Breakdown section on flashcard backs is expanded. */
+  breakdownOpen: boolean;
 }
 
 const KEY = 'hanzi-vocab:settings';
@@ -22,6 +24,7 @@ const defaults: Settings = {
   practiceMode: 'choice',
   practiceDirection: 'mixed',
   writingOutline: false,
+  breakdownOpen: false,
 };
 
 let current: Settings = load();
