@@ -1956,3 +1956,255 @@ mark.target {
 .missed .meaning {
   color: var(--muted);
 }
+
+/* ---------- Setup cards (Review / Practice options) ---------- */
+
+.setup-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.setup-col h2 {
+  margin: 0;
+}
+
+/* Big enough that tone marks (zài / zāi / zái) are easy to tell apart. */
+.option-pinyin {
+  font-size: 1.35rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+/* ---------- Match pairs ---------- */
+
+.match-card {
+  padding: 1rem;
+}
+
+.match-card .card-kicker {
+  text-align: center;
+  margin-bottom: 0.6rem;
+}
+
+.match-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.match-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.match-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 58px;
+  padding: 0.45rem 0.5rem;
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  text-align: center;
+  transition: border-color 0.15s, background 0.15s, opacity 0.2s, transform 0.1s;
+}
+
+.match-item.selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.match-item.matched {
+  border-color: var(--good);
+  background: var(--good-soft);
+  color: var(--good);
+  opacity: 0.55;
+  cursor: default;
+}
+
+.match-item.wrong {
+  border-color: var(--bad);
+  background: var(--bad-soft);
+  animation: shake 0.3s;
+}
+
+.match-hanzi {
+  font-size: 1.45rem;
+  line-height: 1.2;
+}
+
+@keyframes shake {
+  25% {
+    transform: translateX(-4px);
+  }
+  75% {
+    transform: translateX(4px);
+  }
+}
+
+/* ---------- Full-screen practice ---------- */
+
+/* The app header (name, streak, due) isn't needed while practicing. */
+body.in-session .topbar {
+  display: none;
+}
+
+body.in-session .content {
+  padding-top: calc(env(safe-area-inset-top) + 0.75rem);
+}
+
+/* ---------- Wide screens (tablets, landscape) ---------- */
+
+@media (min-width: 900px) {
+  .content {
+    max-width: 1120px;
+  }
+
+  .word-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .setup-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 1.5rem;
+    align-items: start;
+  }
+
+  .data-screen {
+    display: block;
+    column-count: 2;
+    column-gap: 0.85rem;
+  }
+
+  .data-screen > .card {
+    break-inside: avoid;
+    margin-bottom: 0.85rem;
+  }
+
+  .fab {
+    right: max(1rem, calc(50vw - 560px + 1rem));
+  }
+}
+
+/*
+ * Landscape practice: the session fills the screen height exactly, split into two columns
+ * (question left, answers right), so nothing needs scrolling.
+ */
+@media (orientation: landscape) and (min-width: 700px) {
+  body.in-session .content {
+    max-width: 1280px;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 0.6rem);
+  }
+
+  body.in-session .content > .session {
+    flex: 1;
+    min-height: 0;
+  }
+
+  /*
+   * Grid: the question (first child) spans every row of the left column; answers, buttons and
+   * feedback stack in the right column. The final 1fr row absorbs the leftover height, so the
+   * question card fills the column without stretching the right-hand rows.
+   */
+  .session .practice {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: repeat(6, auto) minmax(0, 1fr);
+    gap: 0.75rem 1.25rem;
+    align-items: start;
+  }
+
+  .session .practice > :first-child {
+    grid-column: 1;
+    grid-row: 1 / -1;
+    align-self: stretch;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .session .practice > :not(:first-child) {
+    grid-column: 2;
+  }
+
+  .session .flashcard,
+  .session .prompt-card {
+    min-height: 0;
+  }
+
+  /* Use the tall left column for bigger characters. */
+  .session .prompt-hanzi {
+    font-size: clamp(3.5rem, 16vh, 7.5rem);
+  }
+
+  .session .options {
+    grid-template-columns: 1fr;
+  }
+
+  .session .feedback {
+    position: static;
+  }
+
+  /* Match pairs: the two columns are already the layout; feedback goes underneath. */
+  .session .match-practice {
+    grid-template-rows: auto auto minmax(0, 1fr);
+  }
+
+  .session .match-practice > :first-child {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    align-self: start;
+  }
+
+  .session .match-practice > :not(:first-child) {
+    grid-column: 1 / -1;
+  }
+
+  /* Writing: prompt, toggle and buttons on the left; a big drawing grid on the right. */
+  .session .writing-practice {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto auto 1fr;
+    grid-template-areas:
+      'prompt board'
+      'toggle board'
+      'slots board'
+      'rest board';
+    align-items: start;
+  }
+
+  .session .writing-practice > .writing-prompt {
+    grid-area: prompt;
+    align-self: start;
+    overflow: visible;
+  }
+
+  .session .writing-practice > .style-toggle {
+    grid-area: toggle;
+  }
+
+  .session .writing-practice > .char-slots {
+    grid-area: slots;
+  }
+
+  .session .writing-practice > .writing-board {
+    grid-area: board;
+    width: min(calc(100dvh - var(--tabbar-h) - 7rem), 480px);
+  }
+
+  .session .writing-practice > .writing-actions,
+  .session .writing-practice > .free-actions,
+  .session .writing-practice > .feedback {
+    grid-area: rest;
+    width: 100%;
+  }
+}

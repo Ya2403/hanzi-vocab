@@ -20,7 +20,7 @@ export function SessionOptions({
   onDirection(d: Direction): void;
   totalWords: number;
 }) {
-  const { writingOutline, writingStyle, sentenceSource } = useSettings();
+  const { writingOutline, writingStyle, sentenceSource, choiceStyle } = useSettings();
   return (
     <>
       <Segmented
@@ -79,9 +79,23 @@ export function SessionOptions({
         </>
       ) : (
         <>
+          {mode === 'choice' && (
+            <Segmented
+              label="Style"
+              value={choiceStyle}
+              onChange={(v) => updateSettings({ choiceStyle: v })}
+              options={[
+                { value: 'single', label: 'One word · 4 answers' },
+                { value: 'match', label: 'Match pairs' },
+              ]}
+            />
+          )}
+          {mode === 'choice' && choiceStyle === 'match' && (
+            <p className="hint">Up to 5 words at a time: tap a word, then its match. Words you mismatch come back later.</p>
+          )}
           {mode === 'typing' && (
             <p className="hint">
-              中 → EN: type the meaning. EN → 中: type hanzi or pinyin (tone marks or numbers like ni3 hao3; toneless counts as “close”).
+              中 → EN: type the meaning. EN → 中: type hanzi or pinyin. 中 → 拼音: type the pinyin. Pinyin can use tone marks or numbers (ni3 hao3); toneless counts as “close”.
             </p>
           )}
           <Segmented
@@ -91,6 +105,7 @@ export function SessionOptions({
             options={[
               { value: 'zh-en', label: '中 → EN' },
               { value: 'en-zh', label: 'EN → 中' },
+              { value: 'zh-py', label: '中 → 拼音' },
               { value: 'mixed', label: 'Mixed' },
             ]}
           />

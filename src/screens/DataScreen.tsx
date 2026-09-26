@@ -54,7 +54,7 @@ export function DataScreen() {
   };
 
   return (
-    <section className="screen">
+    <section className="screen data-screen">
       <div className="card">
         <h2>Progress</h2>
         <div className="stat-grid">

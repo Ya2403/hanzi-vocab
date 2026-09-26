@@ -199,7 +199,7 @@ export function FreeDraw({ word, onAnswer, onSkip }: Props) {
   };
 
   return (
-    <div className="practice">
+    <div className="practice writing-practice">
       <WritingPrompt word={word} />
       <WritingStyleToggle />
       <CharSlots chars={chars} index={index} done={status === 'checked' && isLast} />

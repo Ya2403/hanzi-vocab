@@ -40,8 +40,8 @@ export interface Word {
 export type WordInput = Pick<Word, 'hanzi' | 'pinyin' | 'meaning' | 'example' | 'exampleTranslation' | 'exampleRef' | 'notes' | 'tags'>;
 
 export type PracticeMode = 'flashcards' | 'choice' | 'typing' | 'writing' | 'sentence';
-/** zh-en: show Chinese, recall meaning. en-zh: show meaning, recall Chinese. */
-export type CardDirection = 'zh-en' | 'en-zh';
+/** zh-en: show Chinese, recall meaning. en-zh: show meaning, recall Chinese. zh-py: show Chinese, recall pinyin. */
+export type CardDirection = 'zh-en' | 'en-zh' | 'zh-py';
 export type Direction = CardDirection | 'mixed';
 
 export interface StreakState {

@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../store';
-import { reviewWithLeech } from '../lib/srs';
+import { Grade, reviewWithLeech } from '../lib/srs';
 import { shuffle } from '../lib/words';
 import type { CardDirection, Direction, PracticeMode, Word } from '../lib/types';
 import { Flashcard } from './Flashcard';
@@ -11,6 +11,7 @@ import { updateSettings, usePinyinVisibility, useSettings } from '../lib/setting
 import { LeechPrompt } from './LeechPrompt';
 import { Typing } from './Typing';
 import { SentenceCloze } from './SentenceCloze';
+import { MatchPairs } from './MatchPairs';
 import { Icon } from './Icon';
 
 interface Props {
@@ -28,7 +29,11 @@ interface Step {
   dir: CardDirection;
 }
 
-const resolveDir = (d: Direction): CardDirection => (d === 'mixed' ? (Math.random() < 0.5 ? 'zh-en' : 'en-zh') : d);
+const MIXED: CardDirection[] = ['zh-en', 'en-zh', 'zh-py'];
+const resolveDir = (d: Direction): CardDirection => (d === 'mixed' ? MIXED[Math.floor(Math.random() * MIXED.length)] : d);
+
+/** Words per Match-pairs round. */
+const MATCH_BATCH = 5;
 
 /**
  * Runs through a set of cards. Only the first answer to each word is graded; words
@@ -37,7 +42,13 @@ const resolveDir = (d: Direction): CardDirection => (d === 'mixed' ? (Math.rando
  */
 export function Session({ title, words: initialWords, mode, direction, updateSchedule: initialUpdate, onExit }: Props) {
   const { words: allWords, updateWord, recordReview } = useStore();
-  const { writingStyle, leechThreshold, showPinyin } = useSettings();
+  const { writingStyle, leechThreshold, showPinyin, choiceStyle } = useSettings();
+
+  // Full-screen practice: the app header is hidden while a session is open (see .in-session in CSS).
+  useEffect(() => {
+    document.body.classList.add('in-session');
+    return () => document.body.classList.remove('in-session');
+  }, []);
   const pinyin = usePinyinVisibility();
   const [leech, setLeech] = useState<{ id: string; lapses: number } | null>(null);
   const [pool, setPool] = useState(initialWords);
@@ -54,19 +65,39 @@ export function Session({ title, words: initialWords, mode, direction, updateSch
   const remaining = new Set(queue.map((s) => s.id)).size;
   const done = pool.length - remaining;
 
+  /** Record a word's first answer in this session (later retries aren't graded). */
+  const grade = (w: Word, q: number) => {
+    if (results.has(w.id)) return;
+    setResults((r) => new Map(r).set(w.id, q));
+    const writes: Promise<void>[] = [recordReview()];
+    if (updateSchedule) {
+      const { srs, becameLeech } = reviewWithLeech(w.srs, q, leechThreshold);
+      writes.push(updateWord({ ...w, srs }));
+      if (becameLeech) setLeech({ id: w.id, lapses: srs.lapses });
+    }
+    Promise.all(writes).catch((e) => console.error('Failed to save review', e));
+  };
+
   const answer = (q: number) => {
     if (!current || !word) return;
-    if (!results.has(word.id)) {
-      setResults((r) => new Map(r).set(word.id, q));
-      const writes: Promise<void>[] = [recordReview()];
-      if (updateSchedule) {
-        const { srs, becameLeech } = reviewWithLeech(word.srs, q, leechThreshold);
-        writes.push(updateWord({ ...word, srs }));
-        if (becameLeech) setLeech({ id: word.id, lapses: srs.lapses });
-      }
-      Promise.all(writes).catch((e) => console.error('Failed to save review', e));
-    }
+    grade(word, q);
     setQueue(([head, ...rest]) => (q < 3 ? [...rest, { ...head, dir: resolveDir(direction) }] : rest));
+    setStep((s) => s + 1);
+  };
+
+  // Match pairs: several words per round; missed ones go to the back of the queue.
+  const matchRound = mode === 'choice' && choiceStyle === 'match' && queue.length > 1;
+  const batch = matchRound
+    ? queue.slice(0, MATCH_BATCH).map((st) => liveById.get(st.id) ?? byId.get(st.id)).filter((w): w is Word => !!w)
+    : [];
+  const answerBatch = (list: { id: string; quality: number }[]) => {
+    const q = new Map(list.map((r) => [r.id, r.quality]));
+    for (const w of batch) grade(w, q.get(w.id) ?? Grade.Again);
+    setQueue((qu) => {
+      const round = qu.slice(0, batch.length);
+      const failed = round.filter((st) => (q.get(st.id) ?? 0) < 3).map((st) => ({ ...st, dir: resolveDir(direction) }));
+      return [...qu.slice(batch.length), ...failed];
+    });
     setStep((s) => s + 1);
   };
 
@@ -157,6 +188,8 @@ export function Session({ title, words: initialWords, mode, direction, updateSch
       </div>
       {mode === 'flashcards' ? (
         <Flashcard key={step} word={word} direction={current.dir} graded={updateSchedule} onAnswer={answer} />
+      ) : matchRound ? (
+        <MatchPairs key={step} words={batch} direction={current.dir} onDone={answerBatch} />
       ) : mode === 'choice' ? (
         <MultipleChoice key={step} word={word} allWords={allWords} direction={current.dir} onAnswer={answer} />
       ) : mode === 'sentence' ? (

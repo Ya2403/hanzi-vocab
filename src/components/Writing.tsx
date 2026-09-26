@@ -134,7 +134,7 @@ export function Writing({ word, onAnswer, onSkip }: Props) {
   const grade = gradeFor(mistakes, chars.length, helped, gaveUp);
 
   return (
-    <div className="practice">
+    <div className="practice writing-practice">
       <WritingPrompt word={word} />
       <WritingStyleToggle />
       <CharSlots chars={chars} index={index} done={status === 'done'} />

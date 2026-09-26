@@ -8,17 +8,18 @@ import { shuffle } from '../lib/words';
 import type { Word } from '../lib/types';
 import { Session } from '../components/Session';
 import { modeAvailable, SessionOptions } from '../components/SessionOptions';
+import { TagPicker, tagLabel, wordsInTags } from '../components/TagPicker';
 
 export function ReviewScreen({ onGoToWords }: { onGoToWords(): void }) {
   const { words, streak, daily } = useStore();
   const settings = useSettings();
   const [session, setSession] = useState<Word[] | null>(null);
-  const [tag, setTag] = useState('');
+  const [tags, setTags] = useState<string[]>([]);
 
   const on = today();
   const allDue = useMemo(() => words.filter((w) => isDue(w, on)), [words, on]);
-  const tags = useMemo(() => [...new Set(words.flatMap((w) => w.tags))].sort(), [words]);
-  const due = tag ? allDue.filter((w) => w.tags.includes(tag)) : allDue;
+  const due = wordsInTags(allDue, tags);
+  const tagNames = tags.map(tagLabel).join(', ');
   const newCount = due.filter(isNew).length;
   const reviewedToday = daily.date === on ? daily.reviews : 0;
 
@@ -31,7 +32,7 @@ export function ReviewScreen({ onGoToWords }: { onGoToWords(): void }) {
   if (session) {
     return (
       <Session
-        title={tag ? `Daily review · ${tag}` : 'Daily review'}
+        title={tags.length ? `Daily review · ${tagNames}` : 'Daily review'}
         words={session}
         mode={settings.reviewMode}
         direction={settings.reviewDirection}
@@ -67,11 +68,11 @@ export function ReviewScreen({ onGoToWords }: { onGoToWords(): void }) {
         </div>
         {due.length > 0 ? (
           <p className="muted">
-            {tag && `“${tag}”: `}
+            {tags.length > 0 && `${tagNames}: `}
             {due.length - newCount} to review · {newCount} new
           </p>
-        ) : tag && allDue.length > 0 ? (
-          <p className="muted">Nothing due in “{tag}” today. {allDue.length} due in other words.</p>
+        ) : tags.length > 0 && allDue.length > 0 ? (
+          <p className="muted">Nothing due in {tagNames} today. {allDue.length} due in other words.</p>
         ) : words.length === 0 ? (
           <p className="muted">Add some words to start reviewing.</p>
         ) : (
@@ -87,33 +88,31 @@ export function ReviewScreen({ onGoToWords }: { onGoToWords(): void }) {
           Go to word list
         </button>
       ) : (
-        <div className="card form">
-          <SessionOptions
-            mode={settings.reviewMode}
-            direction={settings.reviewDirection}
-            onMode={(reviewMode) => updateSettings({ reviewMode })}
-            onDirection={(reviewDirection) => updateSettings({ reviewDirection })}
-            totalWords={words.length}
-          />
-          {tags.length > 0 && (
-            <label className="field">
-              <span className="field-label">Words</span>
-              <select className="select" value={tag} onChange={(e) => setTag(e.target.value)}>
-                <option value="">All due words ({allDue.length})</option>
-                {tags.map((t) => (
-                  <option key={t} value={t}>
-                    {t} ({allDue.filter((w) => w.tags.includes(t)).length} due)
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-          <button className="btn primary block" disabled={!canStart} onClick={start}>
-            {due.length ? `Start review (${due.length})` : 'Nothing due'}
-          </button>
-          <p className="hint">
-            Answers here update each word’s spaced-repetition schedule (SM-2). Missed words come back until you get them right.
-          </p>
+        <div className="card form setup-card">
+          <div className="setup-col">
+            <SessionOptions
+              mode={settings.reviewMode}
+              direction={settings.reviewDirection}
+              onMode={(reviewMode) => updateSettings({ reviewMode })}
+              onDirection={(reviewDirection) => updateSettings({ reviewDirection })}
+              totalWords={words.length}
+            />
+          </div>
+          <div className="setup-col">
+            <TagPicker
+              words={words}
+              selected={tags}
+              onChange={setTags}
+              label="Words (due count)"
+              countOf={(list) => list.filter((w) => isDue(w, on)).length}
+            />
+            <button className="btn primary block" disabled={!canStart} onClick={start}>
+              {due.length ? `Start review (${due.length})` : 'Nothing due'}
+            </button>
+            <p className="hint">
+              Answers here update each word’s spaced-repetition schedule (SM-2). Missed words come back until you get them right.
+            </p>
+          </div>
         </div>
       )}
     </section>

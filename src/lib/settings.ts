@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import type { Direction, PracticeMode } from './types';
+import type { CardDirection, Direction, PracticeMode } from './types';
 
 /** Per-device UI preferences (not vocabulary data), kept in localStorage. */
 export interface Settings {
@@ -13,6 +13,8 @@ export interface Settings {
   writingOutline: boolean;
   /** Writing mode: Hanzi Writer's stroke-by-stroke quiz, or draw the whole character then check. */
   writingStyle: 'strokes' | 'free';
+  /** Choice mode: one word with four answers, or match several pairs at once. */
+  choiceStyle: 'single' | 'match';
   /** Sentence mode: your own example sentences only, or also Tatoeba's. */
   sentenceSource: 'mine' | 'both';
   /** A word becomes a leech after this many lapses. */
@@ -38,6 +40,7 @@ const defaults: Settings = {
   writingOutline: false,
   breakdownOpen: false,
   writingStyle: 'strokes',
+  choiceStyle: 'single',
   sentenceSource: 'both',
   leechThreshold: 5,
   showPinyin: true,
@@ -84,7 +87,9 @@ export function useSettings(): Settings {
  * Where practice pinyin is visible. `question`: before answering; `answer`: after answering
  * (hidden pinyin can still come back on the answer side via "Show pinyin after answering").
  */
-export function usePinyinVisibility(): { question: boolean; answer: boolean } {
+export function usePinyinVisibility(direction?: CardDirection): { question: boolean; answer: boolean } {
   const { showPinyin, pinyinAfterAnswer } = useSettings();
+  // Character → pinyin: the pinyin is the answer, so the setting doesn't apply.
+  if (direction === 'zh-py') return { question: false, answer: true };
   return { question: showPinyin, answer: showPinyin || pinyinAfterAnswer };
 }

@@ -4,7 +4,8 @@ import { SpeakButton } from './SpeakButton';
 
 /** Inner padding of the writing board; Hanzi Writer and the free-draw pad must agree on it. */
 export const BOARD_PADDING = 12;
-export const MAX_BOARD_SIZE = 300;
+/** Portrait phones get 300px (CSS); landscape tablets can grow the board up to this. */
+export const MAX_BOARD_SIZE = 480;
 
 export const cssVar = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 

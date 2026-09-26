@@ -17,14 +17,22 @@ const gradeOf: Record<Check['verdict'], number> = { correct: Grade.Good, close: 
 export function Typing({ word, direction, onAnswer }: Props) {
   const [input, setInput] = useState('');
   const [result, setResult] = useState<Check | null>(null);
-  const pv = usePinyinVisibility();
+  const pv = usePinyinVisibility(direction);
   const [revealed, setRevealed] = useState(false);
   const pinyinShown = revealed || (result ? pv.answer : pv.question);
   const inputRef = useRef<HTMLInputElement>(null);
   const toChinese = direction === 'en-zh';
+  const toPinyinDir = direction === 'zh-py';
+  const [hint, setHint] = useState<string | null>(null);
+  // In 中 → 拼音 the pinyin is the answer, so it can't be revealed early.
+  const canReveal = !pinyinShown && !toPinyinDir;
 
   const check = (answer: string) => {
-    const r = toChinese ? checkChinese(answer, word) : checkMeaning(answer, word.meaning);
+    if (toPinyinDir && /[㐀-鿿]/.test(answer)) {
+      setHint('Type the pinyin, e.g. ni3 hao3 or nǐ hǎo.');
+      return;
+    }
+    const r = toChinese || toPinyinDir ? checkChinese(answer, word) : checkMeaning(answer, word.meaning);
     setResult(r);
     if (getSettings().autoPlay) speak(word.hanzi);
     // Keep focus in the field so Enter / the keyboard's Go button continues.
@@ -48,20 +56,26 @@ export function Typing({ word, direction, onAnswer }: Props) {
   return (
     <div className="practice">
       <div className="card prompt-card">
-        <div className="card-kicker">{toChinese ? 'Type it in Chinese (hanzi or pinyin)' : 'Type the meaning'}</div>
+        <div className="card-kicker">
+          {toChinese ? 'Type it in Chinese (hanzi or pinyin)' : toPinyinDir ? 'Type the pinyin' : 'Type the meaning'}
+        </div>
         {toChinese ? (
           <div className="prompt-meaning">{word.meaning}</div>
         ) : (
           <>
             <div
-              className={`prompt-hanzi ${pinyinShown ? '' : 'can-reveal'}`}
+              className={`prompt-hanzi ${canReveal ? 'can-reveal' : ''}`}
               lang="zh-CN"
-              onClick={pinyinShown ? undefined : () => setRevealed(true)}
-              title={pinyinShown ? undefined : 'Tap to show pinyin'}
+              onClick={canReveal ? () => setRevealed(true) : undefined}
+              title={canReveal ? 'Tap to show pinyin' : undefined}
             >
               {word.hanzi}
             </div>
-            {pinyinShown ? <div className="pinyin big">{word.pinyin}</div> : <div className="reveal-hint">tap the characters for pinyin</div>}
+            {pinyinShown ? (
+              <div className="pinyin big">{word.pinyin}</div>
+            ) : canReveal ? (
+              <div className="reveal-hint">tap the characters for pinyin</div>
+            ) : null}
           </>
         )}
       </div>
@@ -71,9 +85,12 @@ export function Typing({ word, direction, onAnswer }: Props) {
           ref={inputRef}
           className={`input typing-input ${result ? `is-${result.verdict}` : ''}`}
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={(e) => {
+            setInput(e.target.value);
+            setHint(null);
+          }}
           readOnly={result !== null}
-          placeholder={toChinese ? '汉字 / ni3 hao3 / nǐ hǎo' : 'meaning'}
+          placeholder={toChinese ? '汉字 / ni3 hao3 / nǐ hǎo' : toPinyinDir ? 'ni3 hao3 / nǐ hǎo' : 'meaning'}
           lang={toChinese ? 'zh-CN' : 'en'}
           autoFocus
           autoComplete="off"
@@ -83,6 +100,7 @@ export function Typing({ word, direction, onAnswer }: Props) {
           enterKeyHint={result ? 'next' : 'done'}
           aria-label="Your answer"
         />
+        {hint && !result && <p className="hint warn">{hint}</p>}
         {!result && (
           <div className="row typing-buttons">
             <button type="button" className="btn ghost" onClick={giveUp}>
