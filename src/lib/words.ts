@@ -22,9 +22,9 @@ export function cleanInput(input: WordInput): WordInput {
   };
 }
 
-export function createWord(input: WordInput): Word {
-  const now = Date.now();
-  return { id: newId(), ...cleanInput(input), createdAt: now, updatedAt: now, srs: newSrs() };
+/** `createdAt` can be given so words added together keep their order (Learn mode teaches in added order). */
+export function createWord(input: WordInput, createdAt: number = Date.now()): Word {
+  return { id: newId(), ...cleanInput(input), createdAt, updatedAt: createdAt, srs: newSrs() };
 }
 
 export function normalizeTags(tags: string[]): string[] {

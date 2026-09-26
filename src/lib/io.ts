@@ -36,8 +36,10 @@ export function parseImport(text: string): { words: Word[]; invalid: number } {
 
   const words: Word[] = [];
   let invalid = 0;
-  for (const raw of list) {
-    const w = normalizeWord(raw);
+  const now = Date.now();
+  for (const [i, raw] of list.entries()) {
+    // Entries without a timestamp get consecutive ones, keeping the file's order.
+    const w = normalizeWord(raw, now + i);
     if (w) words.push(w);
     else invalid++;
   }
@@ -48,13 +50,12 @@ const str = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
 const num = (v: unknown, fallback: number): number =>
   typeof v === 'number' && Number.isFinite(v) ? v : fallback;
 
-function normalizeWord(raw: unknown): Word | null {
+function normalizeWord(raw: unknown, fallbackTime: number): Word | null {
   if (!raw || typeof raw !== 'object') return null;
   const r = raw as Record<string, unknown>;
   const hanzi = str(r.hanzi);
   const meaning = str(r.meaning);
   if (!hanzi || !meaning) return null;
-  const now = Date.now();
   const tags = Array.isArray(r.tags) ? r.tags.filter((t): t is string => typeof t === 'string') : [];
   return {
     id: str(r.id) || newId(),
@@ -66,8 +67,8 @@ function normalizeWord(raw: unknown): Word | null {
     exampleRef: typeof r.exampleRef === 'number' ? r.exampleRef : undefined,
     notes: str(r.notes) || undefined,
     tags: normalizeTags(tags),
-    createdAt: num(r.createdAt, now),
-    updatedAt: num(r.updatedAt, now),
+    createdAt: num(r.createdAt, fallbackTime),
+    updatedAt: num(r.updatedAt, fallbackTime),
     srs: normalizeSrs(r.srs),
   };
 }
@@ -83,6 +84,8 @@ function normalizeSrs(raw: unknown): SrsState {
     lapses: Math.max(0, Math.round(num(r.lapses, 0))),
     due: isValidDateStr(r.due) ? r.due : base.due,
     lastReviewed: isValidDateStr(r.lastReviewed) ? r.lastReviewed : undefined,
+    successes: typeof r.successes === 'number' ? Math.max(0, Math.round(r.successes)) : undefined,
+    learnedOn: isValidDateStr(r.learnedOn) ? r.learnedOn : undefined,
     leech: r.leech === true || undefined,
     lapsesAtUnmark: typeof r.lapsesAtUnmark === 'number' ? Math.max(0, Math.round(r.lapsesAtUnmark)) : undefined,
   };

@@ -27,6 +27,8 @@ interface Props {
 interface Step {
   id: string;
   dir: CardDirection;
+  /** An extra, ungraded writing card (Review, after enough successful reviews). */
+  extra?: 'writing';
 }
 
 const MIXED: CardDirection[] = ['zh-en', 'en-zh', 'zh-py'];
@@ -42,7 +44,7 @@ const MATCH_BATCH = 5;
  */
 export function Session({ title, words: initialWords, mode, direction, updateSchedule: initialUpdate, onExit }: Props) {
   const { words: allWords, updateWord, recordReview } = useStore();
-  const { writingStyle, leechThreshold, showPinyin, choiceStyle } = useSettings();
+  const { writingStyle, leechThreshold, showPinyin, choiceStyle, writingAfterReviews } = useSettings();
 
   // Full-screen practice: the app header is hidden while a session is open (see .in-session in CSS).
   useEffect(() => {
@@ -65,38 +67,53 @@ export function Session({ title, words: initialWords, mode, direction, updateSch
   const remaining = new Set(queue.map((s) => s.id)).size;
   const done = pool.length - remaining;
 
-  /** Record a word's first answer in this session (later retries aren't graded). */
-  const grade = (w: Word, q: number) => {
-    if (results.has(w.id)) return;
+  /**
+   * Record a word's first answer in this session (later retries aren't graded).
+   * Returns true if the word has now earned an extra writing card.
+   */
+  const grade = (w: Word, q: number): boolean => {
+    if (results.has(w.id)) return false;
     setResults((r) => new Map(r).set(w.id, q));
     const writes: Promise<void>[] = [recordReview()];
+    let earnsWriting = false;
     if (updateSchedule) {
       const { srs, becameLeech } = reviewWithLeech(w.srs, q, leechThreshold);
       writes.push(updateWord({ ...w, srs }));
       if (becameLeech) setLeech({ id: w.id, lapses: srs.lapses });
+      earnsWriting = q >= 3 && mode !== 'writing' && writingAfterReviews > 0 && (srs.successes ?? 0) >= writingAfterReviews;
     }
     Promise.all(writes).catch((e) => console.error('Failed to save review', e));
+    return earnsWriting;
   };
 
   const answer = (q: number) => {
     if (!current || !word) return;
-    grade(word, q);
-    setQueue(([head, ...rest]) => (q < 3 ? [...rest, { ...head, dir: resolveDir(direction) }] : rest));
+    if (current.extra) {
+      // Extra writing card: practice only, the word was already graded.
+      setQueue(([, ...rest]) => rest);
+      setStep((s) => s + 1);
+      return;
+    }
+    const writing = grade(word, q);
+    setQueue(([head, ...rest]) =>
+      q < 3 ? [...rest, { ...head, dir: resolveDir(direction) }] : writing ? [{ ...head, extra: 'writing' }, ...rest] : rest,
+    );
     setStep((s) => s + 1);
   };
 
   // Match pairs: several words per round; missed ones go to the back of the queue.
-  const matchRound = mode === 'choice' && choiceStyle === 'match' && queue.length > 1;
+  const matchRound = mode === 'choice' && choiceStyle === 'match' && queue.length > 1 && !current?.extra;
   const batch = matchRound
     ? queue.slice(0, MATCH_BATCH).map((st) => liveById.get(st.id) ?? byId.get(st.id)).filter((w): w is Word => !!w)
     : [];
   const answerBatch = (list: { id: string; quality: number }[]) => {
     const q = new Map(list.map((r) => [r.id, r.quality]));
-    for (const w of batch) grade(w, q.get(w.id) ?? Grade.Again);
+    const writing = new Set(batch.filter((w) => grade(w, q.get(w.id) ?? Grade.Again)).map((w) => w.id));
     setQueue((qu) => {
       const round = qu.slice(0, batch.length);
       const failed = round.filter((st) => (q.get(st.id) ?? 0) < 3).map((st) => ({ ...st, dir: resolveDir(direction) }));
-      return [...qu.slice(batch.length), ...failed];
+      const extras = round.filter((st) => writing.has(st.id)).map((st) => ({ ...st, extra: 'writing' as const }));
+      return [...extras, ...qu.slice(batch.length), ...failed];
     });
     setStep((s) => s + 1);
   };
@@ -184,9 +201,15 @@ export function Session({ title, words: initialWords, mode, direction, updateSch
       {leechPrompt}
       <div className="session-title muted small">
         {title}
-        {results.has(word.id) && ' · retry'}
+        {current.extra ? ' · writing practice' : results.has(word.id) && ' · retry'}
       </div>
-      {mode === 'flashcards' ? (
+      {current.extra === 'writing' ? (
+        writingStyle === 'free' ? (
+          <FreeDraw key={`extra-${step}`} word={word} onAnswer={answer} onSkip={answer.bind(null, 0)} />
+        ) : (
+          <Writing key={`extra-${step}`} word={word} onAnswer={answer} onSkip={answer.bind(null, 0)} />
+        )
+      ) : mode === 'flashcards' ? (
         <Flashcard key={step} word={word} direction={current.dir} graded={updateSchedule} onAnswer={answer} />
       ) : matchRound ? (
         <MatchPairs key={step} words={batch} direction={current.dir} onDone={answerBatch} />

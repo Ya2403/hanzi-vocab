@@ -16,6 +16,10 @@ export interface SrsState {
   due: string;
   /** Local date of the last graded review. */
   lastReviewed?: string;
+  /** Successful (Hard/Good/Easy) reviews in total; unlocks the extra writing card in Review. */
+  successes?: number;
+  /** Local date the word was learned in Learn mode. */
+  learnedOn?: string;
 }
 
 export interface Word {

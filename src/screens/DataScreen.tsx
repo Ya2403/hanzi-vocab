@@ -264,7 +264,7 @@ function Stat({ value, label }: { value: number; label: string }) {
 }
 
 function SettingsCard({ leechCount }: { leechCount: number }) {
-  const { showPinyin, pinyinAfterAnswer, listPinyin, leechThreshold } = useSettings();
+  const { showPinyin, pinyinAfterAnswer, listPinyin, leechThreshold, writingAfterReviews } = useSettings();
   return (
     <div className="card form">
       <h2>Settings</h2>
@@ -290,6 +290,26 @@ function SettingsCard({ leechCount }: { leechCount: number }) {
       <label className="toggle">
         <input type="checkbox" checked={listPinyin} onChange={(e) => updateSettings({ listPinyin: e.target.checked })} />
         <span>Show pinyin in the word list</span>
+      </label>
+
+      <label className="field">
+        <span className="field-label">Writing practice in Review</span>
+        <div className="input-row">
+          <input
+            className="input narrow"
+            type="number"
+            min={0}
+            max={20}
+            value={writingAfterReviews}
+            onChange={(e) => {
+              const n = Math.round(Number(e.target.value));
+              if (n >= 0 && n <= 20) updateSettings({ writingAfterReviews: n });
+            }}
+          />
+          <span className="small muted">
+            {writingAfterReviews ? 'successful reviews before a word also gets a writing card' : 'off: no writing cards in Review'}
+          </span>
+        </div>
       </label>
 
       <label className="field">

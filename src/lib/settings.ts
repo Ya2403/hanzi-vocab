@@ -17,6 +17,14 @@ export interface Settings {
   choiceStyle: 'single' | 'match';
   /** Sentence mode: your own example sentences only, or also Tatoeba's. */
   sentenceSource: 'mine' | 'both';
+  /** Learn mode: words taught per batch. */
+  learnBatchSize: number;
+  /** Learn mode: new words per day. */
+  learnDailyLimit: number;
+  /** Learn mode: finish each batch with a typing round. */
+  learnTyping: boolean;
+  /** Review: add a writing card for words with at least this many successful reviews (0 = never). */
+  writingAfterReviews: number;
   /** A word becomes a leech after this many lapses. */
   leechThreshold: number;
   /** Pinyin on practice question sides and under example sentences. */
@@ -42,6 +50,10 @@ const defaults: Settings = {
   writingStyle: 'strokes',
   choiceStyle: 'single',
   sentenceSource: 'both',
+  learnBatchSize: 6,
+  learnDailyLimit: 15,
+  learnTyping: false,
+  writingAfterReviews: 3,
   leechThreshold: 5,
   showPinyin: true,
   pinyinAfterAnswer: true,

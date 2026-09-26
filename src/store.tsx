@@ -54,7 +54,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addWords = useCallback(async (inputs: WordInput[]) => {
-    const created = inputs.map(createWord);
+    // One millisecond apart, so the list order survives (e.g. a lesson from Bulk add).
+    const now = Date.now();
+    const created = inputs.map((input, i) => createWord(input, now + i));
     await db.putWords(created);
     setWords((ws) => [...ws, ...created]);
   }, []);

@@ -2208,3 +2208,118 @@ body.in-session .content {
     width: 100%;
   }
 }
+
+/* ---------- Learn ---------- */
+
+.stat-of {
+  font-size: 1rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.teach-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 1.25rem 1rem;
+  text-align: center;
+}
+
+.teach-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.teach-hanzi {
+  font-size: clamp(3.5rem, 18vw, 5.5rem);
+  line-height: 1.1;
+  font-weight: 500;
+}
+
+.teach-meaning {
+  font-size: 1.3rem;
+  font-weight: 600;
+}
+
+.teach-components {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.teach-formula {
+  font-size: 1.05rem;
+}
+
+.teach-formula .teach-char {
+  font-size: 1.3rem;
+}
+
+.teach-formula .role {
+  margin-left: 0.3rem;
+  vertical-align: middle;
+}
+
+.teach-done {
+  min-height: 52px;
+  font-size: 1.1rem;
+}
+
+.listen-btn {
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  color: var(--accent);
+}
+
+.lead {
+  font-size: 1.6rem;
+  margin: 0.25rem 0;
+}
+
+.learn-progress ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.learn-progress li {
+  display: grid;
+  grid-template-columns: minmax(5rem, 9rem) 1fr auto;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.lp-tag {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lp-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.lp-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--good);
+  border-radius: inherit;
+}
+
+.lp-count {
+  color: var(--muted);
+  white-space: nowrap;
+}

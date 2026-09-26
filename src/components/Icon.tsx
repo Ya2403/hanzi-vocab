@@ -12,6 +12,7 @@ const paths = {
   refresh: 'M4 12a8 8 0 0 1 14-5.3L20 9M20 4v5h-5M20 12a8 8 0 0 1-14 5.3L4 15m0 5v-5h5',
   check: 'm5 12 5 5L20 7',
   x: 'M6 6l12 12M18 6 6 18',
+  learn: 'M2 5h6a4 4 0 0 1 4 4v11a3 3 0 0 0-3-3H2V5Zm20 0h-6a4 4 0 0 0-4 4v11a3 3 0 0 1 3-3h7V5Z',
 } as const;
 
 export type IconName = keyof typeof paths;

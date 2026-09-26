@@ -29,6 +29,8 @@ export function applyReview(s: SrsState, q: number, on: string = today()): SrsSt
     interval,
     reps,
     lapses,
+    // Older words have no counter yet: their streak of successes is the best estimate.
+    successes: (s.successes ?? s.reps) + (q >= 3 ? 1 : 0),
     due: addDays(on, interval),
     lastReviewed: on,
   };

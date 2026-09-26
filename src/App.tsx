@@ -1,21 +1,23 @@
 import { useEffect, useState } from 'react';
 import { useStore } from './store';
 import { today } from './lib/date';
-import { isDue } from './lib/srs';
+import { isDue, isNew } from './lib/srs';
 import { liveStreak } from './lib/streak';
 import { Icon, type IconName } from './components/Icon';
 import { WordsScreen } from './screens/WordsScreen';
 import { ReviewScreen } from './screens/ReviewScreen';
 import { PracticeScreen } from './screens/PracticeScreen';
 import { DataScreen } from './screens/DataScreen';
+import { LearnScreen } from './screens/LearnScreen';
 
 const tabs: { id: Tab; label: string; icon: IconName }[] = [
   { id: 'words', label: 'Words', icon: 'list' },
+  { id: 'learn', label: 'Learn', icon: 'learn' },
   { id: 'review', label: 'Review', icon: 'review' },
   { id: 'practice', label: 'Practice', icon: 'cards' },
-  { id: 'data', label: 'Stats & data', icon: 'data' },
+  { id: 'data', label: 'Stats', icon: 'data' },
 ];
-type Tab = 'words' | 'review' | 'practice' | 'data';
+type Tab = 'words' | 'learn' | 'review' | 'practice' | 'data';
 
 const tabFromHash = (): Tab => {
   const h = location.hash.slice(1).split('?')[0];
@@ -39,7 +41,8 @@ export default function App() {
   };
 
   const on = today();
-  const dueCount = words.filter((w) => isDue(w, on)).length;
+  // New words are taught in Learn, so they never count as due for Review.
+  const dueCount = words.filter((w) => isDue(w, on) && !isNew(w)).length;
   const streakDays = liveStreak(streak, on);
   const doneToday = streak.lastDate === on;
 
@@ -66,7 +69,8 @@ export default function App() {
       <main className="content">
         {error && <p className="hint error card">{error}</p>}
         {tab === 'words' && <WordsScreen />}
-        {tab === 'review' && <ReviewScreen onGoToWords={() => go('words')} />}
+        {tab === 'learn' && <LearnScreen onGoToWords={() => go('words')} />}
+        {tab === 'review' && <ReviewScreen onGoToWords={() => go('words')} onGoToLearn={() => go('learn')} />}
         {tab === 'practice' && <PracticeScreen />}
         {tab === 'data' && <DataScreen />}
       </main>
