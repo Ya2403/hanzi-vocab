@@ -64,3 +64,47 @@ export function formatInterval(days: number): string {
   if (days < 365) return `${Math.round(days / 30)}mo`;
   return `${(days / 365).toFixed(1)}y`;
 }
+
+// ---------- Word states ----------
+
+/** Finished Learn (has an SM-2 schedule). The opposite of isNew. */
+export const isLearned = (w: Word): boolean => !isNew(w);
+
+/** Learned and its review date has arrived. New words are never "due": they belong to Learn. */
+export const isDueLearned = (w: Word, on: string = today()): boolean => isLearned(w) && isDue(w, on);
+
+// ---------- Answer statistics ----------
+
+/** Record one answer (any mode) in the word's accuracy statistics. */
+export function recordAnswer(s: SrsState, correct: boolean, now: number = Date.now()): SrsState {
+  return {
+    ...s,
+    answered: (s.answered ?? 0) + 1,
+    correct: (s.correct ?? 0) + (correct ? 1 : 0),
+    recent: ((s.recent ?? '') + (correct ? '1' : '0')).slice(-5),
+    lastSeen: now,
+  };
+}
+
+export const accuracy = (s: SrsState): number | null => (s.answered ? (s.correct ?? 0) / s.answered : null);
+
+/** A word counts as "well known" once its interval reached a week. */
+export const WELL_KNOWN_INTERVAL = 7;
+
+/**
+ * A miss in free Practice: the word comes back in Review tomorrow at the latest, with its interval
+ * halved so it has to earn long gaps again. For a well-known word it also counts as a lapse
+ * (and can make it a leech). Correct answers in Practice never change the schedule.
+ */
+export function practiceMiss(s: SrsState, leechThreshold: number, on: string = today()) {
+  const tomorrow = addDays(on, 1);
+  const wellKnown = s.interval >= WELL_KNOWN_INTERVAL;
+  const next: SrsState = {
+    ...s,
+    due: s.due > tomorrow ? tomorrow : s.due,
+    interval: Math.max(1, Math.round(s.interval / 2)),
+    lapses: s.lapses + (wellKnown ? 1 : 0),
+  };
+  const becameLeech = wellKnown && !s.leech && leechLapses(next) >= leechThreshold;
+  return { srs: becameLeech ? { ...next, leech: true } : next, becameLeech };
+}

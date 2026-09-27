@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { useStore, type ImportMode } from '../store';
 import { today } from '../lib/date';
 import { exportWords, parseImport } from '../lib/io';
-import { isDue, isLeech, isNew, LEECH_FILTER } from '../lib/srs';
+import { isDueLearned, isLeech, isNew, LEECH_FILTER } from '../lib/srs';
 import { liveStreak } from '../lib/streak';
 import { updateSettings, useSettings } from '../lib/settings';
 import { hasChineseVoice, onVoicesChanged, speak, speechSupported } from '../lib/speech';
@@ -30,7 +30,7 @@ export function DataScreen() {
   const learned = words.filter((w) => !isNew(w)).length;
   const mature = words.filter((w) => w.srs.interval >= 21).length;
   const leeches = words.filter(isLeech).length;
-  const due = words.filter((w) => isDue(w)).length;
+  const due = words.filter((w) => isDueLearned(w)).length;
 
   const onFile = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

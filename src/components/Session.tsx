@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../store';
-import { Grade, reviewWithLeech } from '../lib/srs';
+import { chooseExercise, RETRY_CARD, type Exercise } from '../lib/planner';
+import { Grade, isLearned, practiceMiss, recordAnswer, reviewWithLeech } from '../lib/srs';
 import { shuffle } from '../lib/words';
 import type { CardDirection, Direction, PracticeMode, Word } from '../lib/types';
 import { Flashcard } from './Flashcard';
@@ -12,22 +13,32 @@ import { LeechPrompt } from './LeechPrompt';
 import { Typing } from './Typing';
 import { SentenceCloze } from './SentenceCloze';
 import { MatchPairs } from './MatchPairs';
+import { ListenChoice, listeningAvailable } from './LearnCards';
 import { Icon } from './Icon';
+
+/** 'auto': the planner picks each card's exercise from the word's strength. */
+export type SessionMode = PracticeMode | 'auto';
 
 interface Props {
   title: string;
   words: Word[];
-  mode: PracticeMode;
+  mode: SessionMode;
   direction: Direction;
-  /** Write SM-2 results back to the words (daily review) or just practice. */
+  /** Review: answers update the SM-2 schedule. Practice: only misses do (due tomorrow at the latest). */
   updateSchedule: boolean;
+  /** Leave early (✕). */
   onExit(): void;
+  /** The summary's main button; defaults to onExit. Used to chain Review → Learn → Done. */
+  onFinish?(): void;
+  finishLabel?: string;
 }
 
 interface Step {
   id: string;
   dir: CardDirection;
-  /** An extra, ungraded writing card (Review, after enough successful reviews). */
+  /** Auto mode: which exercise this card is. */
+  ex?: Exercise;
+  /** An extra, ungraded writing card (manual Review, after enough successful reviews). */
   extra?: 'writing';
 }
 
@@ -38,11 +49,11 @@ const resolveDir = (d: Direction): CardDirection => (d === 'mixed' ? MIXED[Math.
 const MATCH_BATCH = 5;
 
 /**
- * Runs through a set of cards. Only the first answer to each word is graded; words
- * answered "Again" go to the back of the queue until they're recalled (per SM-2's
- * advice to repeat failed items in the same session).
+ * Runs through a set of cards. Only the first answer to each word changes its schedule; words
+ * answered wrong go to the back of the queue until they're recalled (per SM-2's advice to
+ * repeat failed items in the same session). Every answer counts toward the word's accuracy.
  */
-export function Session({ title, words: initialWords, mode, direction, updateSchedule: initialUpdate, onExit }: Props) {
+export function Session({ title, words: initialWords, mode, direction, updateSchedule: initialUpdate, onExit, onFinish, finishLabel }: Props) {
   const { words: allWords, updateWord, recordReview } = useStore();
   const { writingStyle, leechThreshold, showPinyin, choiceStyle, writingAfterReviews } = useSettings();
 
@@ -52,15 +63,20 @@ export function Session({ title, words: initialWords, mode, direction, updateSch
     return () => document.body.classList.remove('in-session');
   }, []);
   const pinyin = usePinyinVisibility();
+  const auto = mode === 'auto';
+  const planCard = (w: Word): Step =>
+    auto ? { id: w.id, ...chooseExercise(w, { listening: listeningAvailable }) } : { id: w.id, dir: resolveDir(direction) };
+
   const [leech, setLeech] = useState<{ id: string; lapses: number } | null>(null);
   const [pool, setPool] = useState(initialWords);
   const [updateSchedule, setUpdateSchedule] = useState(initialUpdate);
-  const [queue, setQueue] = useState<Step[]>(() => initialWords.map((w) => ({ id: w.id, dir: resolveDir(direction) })));
+  const [queue, setQueue] = useState<Step[]>(() => initialWords.map(planCard));
   const [results, setResults] = useState<Map<string, number>>(new Map());
   const [step, setStep] = useState(0);
 
   const byId = useMemo(() => new Map(pool.map((w) => [w.id, w])), [pool]);
   const liveById = useMemo(() => new Map(allWords.map((w) => [w.id, w])), [allWords]);
+  const learnedPool = useMemo(() => allWords.filter(isLearned), [allWords]);
   const current = queue[0];
   // Prefer the stored version, so edits made mid-session (e.g. a note from the leech prompt) show up.
   const word = current && (liveById.get(current.id) ?? byId.get(current.id));
@@ -68,36 +84,49 @@ export function Session({ title, words: initialWords, mode, direction, updateSch
   const done = pool.length - remaining;
 
   /**
-   * Record a word's first answer in this session (later retries aren't graded).
-   * Returns true if the word has now earned an extra writing card.
+   * Save one answer: statistics always; the schedule only on the word's first answer this
+   * session (Review: SM-2; Practice: a miss brings the review forward). Returns true if the
+   * word has now earned an extra writing card (manual Review only).
    */
-  const grade = (w: Word, q: number): boolean => {
-    if (results.has(w.id)) return false;
-    setResults((r) => new Map(r).set(w.id, q));
-    const writes: Promise<void>[] = [recordReview()];
+  const grade = (w: Word, q: number, ungraded = false): boolean => {
+    const first = !ungraded && !results.has(w.id);
+    let srs = w.srs;
     let earnsWriting = false;
-    if (updateSchedule) {
-      const { srs, becameLeech } = reviewWithLeech(w.srs, q, leechThreshold);
-      writes.push(updateWord({ ...w, srs }));
-      if (becameLeech) setLeech({ id: w.id, lapses: srs.lapses });
-      earnsWriting = q >= 3 && mode !== 'writing' && writingAfterReviews > 0 && (srs.successes ?? 0) >= writingAfterReviews;
+    let becameLeech = false;
+    if (first) {
+      setResults((r) => new Map(r).set(w.id, q));
+      recordReview().catch(() => {});
+      if (updateSchedule) {
+        const r = reviewWithLeech(srs, q, leechThreshold);
+        srs = r.srs;
+        becameLeech = r.becameLeech;
+        earnsWriting = !auto && q >= 3 && mode !== 'writing' && writingAfterReviews > 0 && (srs.successes ?? 0) >= writingAfterReviews;
+      } else if (q < 3) {
+        const r = practiceMiss(srs, leechThreshold);
+        srs = r.srs;
+        becameLeech = r.becameLeech;
+      }
     }
-    Promise.all(writes).catch((e) => console.error('Failed to save review', e));
+    srs = recordAnswer(srs, q >= 3);
+    updateWord({ ...w, srs }).catch((e) => console.error('Failed to save answer', e));
+    if (becameLeech) setLeech({ id: w.id, lapses: srs.lapses });
     return earnsWriting;
   };
 
   const answer = (q: number) => {
     if (!current || !word) return;
     if (current.extra) {
-      // Extra writing card: practice only, the word was already graded.
+      // Extra writing card: counts toward accuracy, but the word was already graded.
+      grade(word, q, true);
       setQueue(([, ...rest]) => rest);
       setStep((s) => s + 1);
       return;
     }
     const writing = grade(word, q);
-    setQueue(([head, ...rest]) =>
-      q < 3 ? [...rest, { ...head, dir: resolveDir(direction) }] : writing ? [{ ...head, extra: 'writing' }, ...rest] : rest,
-    );
+    setQueue(([head, ...rest]) => {
+      if (q < 3) return [...rest, auto ? { id: head.id, ...RETRY_CARD } : { ...head, dir: resolveDir(direction) }];
+      return writing ? [{ ...head, extra: 'writing' }, ...rest] : rest;
+    });
     setStep((s) => s + 1);
   };
 
@@ -128,7 +157,7 @@ export function Session({ title, words: initialWords, mode, direction, updateSch
     const shuffled = shuffle(list);
     setPool(shuffled);
     setUpdateSchedule(false);
-    setQueue(shuffled.map((w) => ({ id: w.id, dir: resolveDir(direction) })));
+    setQueue(shuffled.map(planCard));
     setResults(new Map());
   };
 
@@ -145,8 +174,8 @@ export function Session({ title, words: initialWords, mode, direction, updateSch
         <div className="summary-score">{pct}%</div>
         <h2>Session complete</h2>
         <p className="muted">
-          {firstTry} of {graded.length} recalled on the first try
-          {updateSchedule || initialUpdate ? ' · schedule updated' : ''}
+          {firstTry} of {graded.length} right on the first try
+          {updateSchedule || initialUpdate ? ' · schedule updated' : missed.length ? ' · missed words come back in Review tomorrow' : ''}
         </p>
         {missed.length > 0 && (
           <>
@@ -168,14 +197,43 @@ export function Session({ title, words: initialWords, mode, direction, updateSch
               Practice missed
             </button>
           )}
-          <button className="btn primary" onClick={onExit}>
-            Done
+          <button className="btn primary" onClick={onFinish ?? onExit} autoFocus>
+            {finishLabel ?? 'Done'}
           </button>
         </div>
         {leechPrompt}
       </div>
     );
   }
+
+  const writingCard = (key: string, onSkip: () => void) =>
+    writingStyle === 'free' ? (
+      <FreeDraw key={key} word={word} onAnswer={answer} onSkip={onSkip} />
+    ) : (
+      <Writing key={key} word={word} onAnswer={answer} onSkip={onSkip} />
+    );
+
+  let card;
+  if (current.extra === 'writing') card = writingCard(`extra-${step}`, answer.bind(null, 0));
+  else if (auto) {
+    const ex = current.ex ?? 'choice';
+    card =
+      ex === 'listen' ? (
+        <ListenChoice key={step} word={word} pool={learnedPool.length >= 4 ? learnedPool : allWords} onAnswer={answer} />
+      ) : ex === 'typing' ? (
+        <Typing key={step} word={word} direction={current.dir} onAnswer={answer} />
+      ) : ex === 'writing' ? (
+        writingCard(`auto-${step}`, skip)
+      ) : (
+        <MultipleChoice key={step} word={word} allWords={learnedPool.length >= 4 ? learnedPool : allWords} direction={current.dir} onAnswer={answer} />
+      );
+  } else if (mode === 'flashcards') card = <Flashcard key={step} word={word} direction={current.dir} graded={updateSchedule} onAnswer={answer} />;
+  else if (matchRound) card = <MatchPairs key={step} words={batch} direction={current.dir} onDone={answerBatch} />;
+  else if (mode === 'choice') card = <MultipleChoice key={step} word={word} allWords={allWords} direction={current.dir} onAnswer={answer} />;
+  else if (mode === 'sentence') card = <SentenceCloze key={step} word={word} onAnswer={answer} onSkip={skip} />;
+  else if (mode === 'typing') card = <Typing key={step} word={word} direction={current.dir} onAnswer={answer} />;
+  // Switching style (in-card toggle) remounts the card for the same word.
+  else card = writingCard(`${writingStyle}-${step}`, skip);
 
   return (
     <div className="session">
@@ -203,30 +261,7 @@ export function Session({ title, words: initialWords, mode, direction, updateSch
         {title}
         {current.extra ? ' · writing practice' : results.has(word.id) && ' · retry'}
       </div>
-      {current.extra === 'writing' ? (
-        writingStyle === 'free' ? (
-          <FreeDraw key={`extra-${step}`} word={word} onAnswer={answer} onSkip={answer.bind(null, 0)} />
-        ) : (
-          <Writing key={`extra-${step}`} word={word} onAnswer={answer} onSkip={answer.bind(null, 0)} />
-        )
-      ) : mode === 'flashcards' ? (
-        <Flashcard key={step} word={word} direction={current.dir} graded={updateSchedule} onAnswer={answer} />
-      ) : matchRound ? (
-        <MatchPairs key={step} words={batch} direction={current.dir} onDone={answerBatch} />
-      ) : mode === 'choice' ? (
-        <MultipleChoice key={step} word={word} allWords={allWords} direction={current.dir} onAnswer={answer} />
-      ) : mode === 'sentence' ? (
-        <SentenceCloze key={step} word={word} onAnswer={answer} onSkip={skip} />
-      ) : mode === 'typing' ? (
-        <Typing key={step} word={word} direction={current.dir} onAnswer={answer} />
-      ) : (
-        // Switching style (in-card toggle) remounts the card for the same word.
-        writingStyle === 'free' ? (
-          <FreeDraw key={`free-${step}`} word={word} onAnswer={answer} onSkip={skip} />
-        ) : (
-          <Writing key={`strokes-${step}`} word={word} onAnswer={answer} onSkip={skip} />
-        )
-      )}
+      {card}
     </div>
   );
 }

@@ -2347,3 +2347,89 @@ body.in-session .content {
   background: var(--bad);
   border-color: var(--bad);
 }
+
+/* ---------- Continue / Done for today ---------- */
+.continue-card {
+  text-align: center;
+}
+.continue-summary {
+  font-size: 1.05rem;
+  margin: 0 0 12px;
+}
+.continue-btn {
+  width: 100%;
+  font-size: 1.25rem;
+  padding: 16px 20px;
+  border-radius: 14px;
+}
+.continue-card .hero-stats {
+  margin-top: 16px;
+}
+.done-today h2 {
+  margin-top: 0;
+}
+
+/* ---------- Tag filter ---------- */
+.tag-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.filter-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.filter-btn b {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.filter-btn.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.filter-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+.filter-panel .row {
+  justify-content: space-between;
+  align-items: center;
+}
+.filter-group .chips {
+  margin-top: 6px;
+}
+.chip .count {
+  opacity: 0.75;
+  font-size: 0.85em;
+}
+
+/* ---------- Word accuracy ---------- */
+.accuracy-line {
+  margin-top: 4px;
+}
+.acc-ok {
+  color: var(--good);
+  font-weight: 700;
+}
+.acc-bad {
+  color: var(--bad);
+  font-weight: 700;
+}

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useStore } from '../store';
 import { formatDate, today } from '../lib/date';
 import { useSettings } from '../lib/settings';
-import { formatInterval, isDue, isLeech, isNew } from '../lib/srs';
+import { accuracy, formatInterval, isDue, isLeech, isNew } from '../lib/srs';
 import type { Word } from '../lib/types';
 import { Breakdown } from './Breakdown';
 import { Icon } from './Icon';
@@ -35,7 +35,7 @@ export function WordDetail({ word: initial, onClose, onEdit }: { word: Word; onC
 
   const s = word.srs;
   const status = isNew(word)
-    ? 'New: not studied yet'
+    ? 'New: not learned yet (learn it in the Learn tab)'
     : isDue(word)
       ? 'Due for review today'
       : `Next review ${s.due === today() ? 'today' : formatDate(s.due)}`;
@@ -90,6 +90,21 @@ export function WordDetail({ word: initial, onClose, onEdit }: { word: Word; onC
               · interval {formatInterval(s.interval)} · {s.reps} correct in a row · forgotten {s.lapses}× · ease {s.ease.toFixed(2)}
             </span>
           )}
+          {s.answered ? (
+            <div className="muted accuracy-line">
+              Accuracy {Math.round((accuracy(s) ?? 0) * 100)}% ({s.correct ?? 0}/{s.answered})
+              {s.recent && (
+                <>
+                  {" · last "}{s.recent.length}:{" "}
+                  {[...s.recent].map((r, i) => (
+                    <span key={i} className={r === "1" ? "acc-ok" : "acc-bad"}>
+                      {r === "1" ? "✓" : "✗"}
+                    </span>
+                  ))}
+                </>
+              )}
+            </div>
+          ) : null}
         </div>
 
         <Breakdown word={word} pinyinVisible={pinyinShown} onOpenWord={(w) => setStack((st) => [...st, w.id])} />

@@ -3,6 +3,7 @@ import { useStore } from '../store';
 import { loadHanziDict, type HanziDict } from '../lib/hanziDict';
 import { isRadicalOnly, learnedSrs, learnedToday, nextBatch, planLearning, type LearnPlan } from '../lib/learn';
 import { useSettings } from '../lib/settings';
+import { recordAnswer } from '../lib/srs';
 import { shuffle } from '../lib/words';
 import type { Word } from '../lib/types';
 import { Icon } from './Icon';
@@ -37,8 +38,22 @@ function withFill(pool: Word[], others: Word[], n: number): Word[] {
   return [...pool, ...shuffle(others.filter((w) => !ids.has(w.id))).slice(0, n - pool.length)];
 }
 
-export function LearnSession({ pool, title, onExit }: { pool: Word[]; title: string; onExit(): void }) {
-  const { words, updateWords, recordReview } = useStore();
+export function LearnSession({
+  pool,
+  title,
+  onExit,
+  onFinish,
+  finishLabel,
+}: {
+  pool: Word[];
+  title: string;
+  /** Leave early (✕). */
+  onExit(): void;
+  /** The summary's main button; defaults to onExit (Continue flow: go on to "Done for today"). */
+  onFinish?(): void;
+  finishLabel?: string;
+}) {
+  const { words, updateWord, updateWords, recordReview } = useStore();
   const { learnBatchSize, learnDailyLimit, learnTyping } = useSettings();
   const rounds = useMemo<Round[]>(
     () => ['meaning', ...(listeningAvailable ? (['listen'] as Round[]) : []), 'produce', ...(learnTyping ? (['typing'] as Round[]) : [])],
@@ -96,9 +111,12 @@ export function LearnSession({ pool, title, onExit }: { pool: Word[]; title: str
   const others = words.filter((w) => !batch.some((b) => b.id === w.id));
   const taughtSoFar = (i: number) => [...learned, ...batch.slice(0, i)];
 
-  const count = () => {
+  /** Every Learn answer counts toward the streak and the word's accuracy statistics. */
+  const count = (w: Word, q: number) => {
     setAnswered((n) => n + 1);
     recordReview().catch(() => {});
+    const live = liveWord(w);
+    updateWord({ ...live, srs: recordAnswer(live.srs, q >= 3) }).catch(() => {});
   };
 
   const startRound = (r: number) => {
@@ -115,7 +133,11 @@ export function LearnSession({ pool, title, onExit }: { pool: Word[]; title: str
 
   const finishBatch = () => {
     const on = learnedSrs();
-    const done = batch.map((w) => ({ ...liveWord(w), srs: on }));
+    // Keep the answer statistics gathered while learning.
+    const done = batch.map((w) => {
+      const { answered, correct, recent, lastSeen } = liveWord(w).srs;
+      return { ...liveWord(w), srs: { ...on, answered, correct, recent, lastSeen } };
+    });
     updateWords(done).catch((e) => console.error('Failed to save learned words', e));
     setLearned((l) => [...l, ...done]);
     setRemaining((rem) => {
@@ -178,8 +200,8 @@ export function LearnSession({ pool, title, onExit }: { pool: Word[]; title: str
             ))}
           </ul>
         )}
-        <button className="btn primary" onClick={onExit}>
-          Done
+        <button className="btn primary" onClick={onFinish ?? onExit} autoFocus>
+          {finishLabel ?? 'Done'}
         </button>
       </div>
     );
@@ -233,7 +255,7 @@ export function LearnSession({ pool, title, onExit }: { pool: Word[]; title: str
             allWords={withFill(taughtSoFar(stage.i), others, 3)}
             direction="zh-en"
             onAnswer={(q) => {
-              count();
+              count(w, q);
               if (q < 3) setMisses((m) => m + 1);
               if (stage.i + 1 < batch.length) {
                 setStage({ kind: 'teach', i: stage.i + 1 });
@@ -252,7 +274,7 @@ export function LearnSession({ pool, title, onExit }: { pool: Word[]; title: str
   const roundPool = withFill(batch, others, 4);
   const inRound = batch.filter((b) => roundApplies(round, b)).length;
   const answer = (q: number) => {
-    count();
+    count(w, q);
     const [head, ...rest] = stage.queue;
     if (q < 3) setMisses((m) => m + 1);
     const queue = q < 3 ? [...rest, head] : rest; // misses come back later in the same round

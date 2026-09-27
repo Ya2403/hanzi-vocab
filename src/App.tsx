@@ -21,7 +21,7 @@ type Tab = 'words' | 'learn' | 'review' | 'practice' | 'data';
 
 const tabFromHash = (): Tab => {
   const h = location.hash.slice(1).split('?')[0];
-  return tabs.some((t) => t.id === h) ? (h as Tab) : 'words';
+  return tabs.some((t) => t.id === h) ? (h as Tab) : 'review';
 };
 
 export default function App() {

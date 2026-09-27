@@ -20,6 +20,11 @@ export interface SrsState {
   successes?: number;
   /** Local date the word was learned in Learn mode. */
   learnedOn?: string;
+  /** Every answer in Review, Learn and Practice: totals, the last 5 results ("1" = right, newest last), time. */
+  answered?: number;
+  correct?: number;
+  recent?: string;
+  lastSeen?: number;
 }
 
 export interface Word {

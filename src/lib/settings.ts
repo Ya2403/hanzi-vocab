@@ -17,6 +17,10 @@ export interface Settings {
   choiceStyle: 'single' | 'match';
   /** Sentence mode: your own example sentences only, or also Tatoeba's. */
   sentenceSource: 'mine' | 'both';
+  /** Review/Practice: pick each card's exercise from the word's strength (off = choose modes yourself). */
+  autoExercise: boolean;
+  /** Practice: cards per session. */
+  practiceSize: number;
   /** Learn mode: words taught per batch. */
   learnBatchSize: number;
   /** Learn mode: new words per day. */
@@ -50,6 +54,8 @@ const defaults: Settings = {
   writingStyle: 'strokes',
   choiceStyle: 'single',
   sentenceSource: 'both',
+  autoExercise: true,
+  practiceSize: 20,
   learnBatchSize: 6,
   learnDailyLimit: 15,
   learnTyping: false,
