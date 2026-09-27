@@ -10,6 +10,7 @@ import { prefetchStrokes, writableChars } from '../lib/strokes';
 import { hanziDictCached, loadHanziDict } from '../lib/hanziDict';
 import { Segmented } from '../components/Segmented';
 import { BulkAdd } from '../components/BulkAdd';
+import { SyncCard } from '../components/SyncCard';
 import { TatoebaBulk } from '../components/Sentences';
 import { corpusCached, loadCorpus } from '../lib/tatoeba';
 
@@ -67,6 +68,8 @@ export function DataScreen() {
           <Stat value={leeches} label="🐛 leeches" />
         </div>
       </div>
+
+      <SyncCard />
 
       <div className="card form">
         <h2>Backup</h2>
@@ -247,6 +250,10 @@ function About() {
           <b>Pinyin</b>: <a href="https://github.com/zh-lx/pinyin-pro" target="_blank" rel="noreferrer">pinyin-pro</a> (MIT).
           Traditional → simplified conversion at build time:{' '}
           <a href="https://github.com/nk2028/opencc-js" target="_blank" rel="noreferrer">opencc-js</a> (MIT).
+        </li>
+        <li>
+          <b>Sync</b> uses Firebase (Google): when you sign in, your words and progress are stored in this app's Firebase
+          database, readable only by your account.
         </li>
         <li>Built with React, Vite, idb and vite-plugin-pwa (MIT/ISC licenses).</li>
       </ul>

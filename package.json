@@ -1,7 +1,7 @@
 {
   "name": "hanzi-vocab",
   "private": true,
-  "version": "0.5.0",
+  "version": "0.6.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -13,6 +13,7 @@
     "build:sentences": "node scripts/build-sentences.mjs"
   },
   "dependencies": {
+    "firebase": "^12.19.0",
     "hanzi-writer": "^3.7.3",
     "idb": "^8.0.3",
     "pinyin-pro": "^3.26.0",

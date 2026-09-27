@@ -24,6 +24,7 @@ A Chinese vocabulary trainer: React + Vite + TypeScript, installable as a PWA, w
 - **Audio**: Web Speech API with a `zh-CN` voice. It can play automatically when an answer is revealed, and the speech rate is adjustable.
 - **Streak**: any answered card counts for the day.
 - **Bulk add**: copy the built-in prompt and give it to ChatGPT (or any AI chat) with a PDF, photo or list, then paste the reply back. The expected format is one word per line, `hanzi | pinyin | meaning | example | tags`. The parser also accepts markdown tables, tab-separated rows, numbered pinyin (`ni3 hao3`) and JSON. A preview shows new words, duplicates and unreadable lines before anything is saved.
+- **Sync between devices** (Stats → Sync): sign in with Google and your words, progress, deletions and streak sync automatically through Firebase (Firestore), so all your devices stay the same. The app is still hosted on GitHub Pages; Firebase only stores the data, under `users/{uid}/…`, and the security rules let each signed-in user access only their own data. Each device keeps working offline and catches up when online. When the same word was changed on two devices, the newer change wins, and the same word added separately on two devices is merged into one. Settings stay per device. The Firebase code is only loaded once sync is turned on.
 - **Backup**: export and import JSON. Merge skips words whose hanzi you already have; Replace swaps out the whole list.
 - **Keyboard shortcuts**: Space flips a card, 1–4 grades it or picks an option, and Enter continues.
 

@@ -2323,3 +2323,22 @@ body.in-session .content {
   color: var(--muted);
   white-space: nowrap;
 }
+
+/* ---------- Sync ---------- */
+
+.sync-state {
+  margin: 0;
+  font-weight: 600;
+}
+
+.sync-state.synced {
+  color: var(--good);
+}
+
+.sync-state.offline {
+  color: var(--warn);
+}
+
+.sync-state.error {
+  color: var(--bad);
+}

@@ -3,6 +3,7 @@ import * as db from './lib/db';
 import { today } from './lib/date';
 import { bumpStreak, emptyStreak } from './lib/streak';
 import { cleanInput, createWord } from './lib/words';
+import { initSync, pushDeletes, pushMeta, pushWords } from './lib/sync';
 import type { DailyStats, StreakState, Word, WordInput } from './lib/types';
 
 export type ImportMode = 'merge' | 'replace';
@@ -46,10 +47,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoading(false));
   }, []);
 
+  // Latest values for sync callbacks (which outlive renders).
+  const wordsRef = useRef(words);
+  wordsRef.current = words;
+
   const addWord = useCallback(async (input: WordInput) => {
     const w = createWord(input);
     await db.putWord(w);
     setWords((ws) => [...ws, w]);
+    pushWords([w]);
     return w;
   }, []);
 
@@ -59,12 +65,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const created = inputs.map((input, i) => createWord(input, now + i));
     await db.putWords(created);
     setWords((ws) => [...ws, ...created]);
+    pushWords(created);
   }, []);
 
   const updateWord = useCallback(async (word: Word) => {
     const updated: Word = { ...word, ...cleanInput(word), updatedAt: Date.now() };
     await db.putWord(updated);
     setWords((ws) => ws.map((w) => (w.id === updated.id ? updated : w)));
+    pushWords([updated]);
   }, []);
 
   /** Save several edited words in one transaction (bulk actions). */
@@ -74,17 +82,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     await db.putWords(updated);
     const byId = new Map(updated.map((w) => [w.id, w]));
     setWords((ws) => ws.map((w) => byId.get(w.id) ?? w));
+    pushWords(updated);
   }, []);
 
   const deleteWord = useCallback(async (id: string) => {
     await db.deleteWord(id);
     setWords((ws) => ws.filter((w) => w.id !== id));
+    pushDeletes([id]);
   }, []);
 
   const importWords = useCallback(
     async (incoming: Word[], mode: ImportMode) => {
       if (mode === 'replace') {
         await db.putWords(incoming, true);
+        const kept = new Set(incoming.map((w) => w.id));
+        pushDeletes(words.filter((w) => !kept.has(w.id)).map((w) => w.id));
+        pushWords(incoming);
         setWords(incoming);
         return { added: incoming.length, skipped: 0 };
       }
@@ -100,6 +113,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
       await db.putWords(fresh);
       setWords((ws) => [...ws, ...fresh]);
+      pushWords(fresh);
       return { added: fresh.length, skipped: incoming.length - fresh.length };
     },
     [words],
@@ -121,7 +135,35 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setStreak(nextStreak);
     setDaily(nextDaily);
     await Promise.all([db.setMeta('streak', nextStreak), db.setMeta('daily', nextDaily)]);
+    pushMeta({ streak: nextStreak, daily: nextDaily });
   }, []);
+
+  // Start cloud sync once local data is loaded. Remote changes are applied here directly
+  // (not through the functions above), so they aren't pushed straight back.
+  useEffect(() => {
+    if (loading || error) return;
+    initSync({
+      getWords: () => wordsRef.current,
+      applyRemote: async (upserts, deleteIds) => {
+        if (upserts.length) await db.putWords(upserts);
+        for (const id of deleteIds) await db.deleteWord(id);
+        const byId = new Map(upserts.map((w) => [w.id, w]));
+        const gone = new Set(deleteIds);
+        const next = wordsRef.current.filter((w) => !gone.has(w.id)).map((w) => byId.get(w.id) ?? w);
+        for (const w of upserts) if (!next.some((x) => x.id === w.id)) next.push(w);
+        wordsRef.current = next;
+        setWords(next);
+      },
+      getMeta: () => ({ streak: streakRef.current, daily: dailyRef.current }),
+      applyMeta: async (m) => {
+        streakRef.current = m.streak;
+        dailyRef.current = m.daily;
+        setStreak(m.streak);
+        setDaily(m.daily);
+        await Promise.all([db.setMeta('streak', m.streak), db.setMeta('daily', m.daily)]);
+      },
+    });
+  }, [loading, error]);
 
   const value = useMemo<Store>(
     () => ({
