@@ -159,6 +159,14 @@ export async function signIn() {
 export async function signOutSync() {
   stopListening();
   writeEnabled(false);
+  // Signing in again later should do a full comparison, so nothing changed meanwhile is missed.
+  if (user) {
+    try {
+      localStorage.removeItem(cursorKey(user.uid));
+    } catch {
+      /* ignore */
+    }
+  }
   if (fb) await fb.a.signOut(fb.auth).catch(() => {});
   setStatus({ state: 'off' }, true);
 }
@@ -306,3 +314,24 @@ export async function pushMeta(meta: SyncMeta): Promise<void> {
 }
 
 export const syncActive = () => !!user;
+
+/**
+ * "Replace all": upload the new list and delete every other word in the cloud, including words
+ * that only exist there or on another device (so every device ends up with exactly this list).
+ */
+export async function replaceAllRemote(words: Word[], removedLocally: string[]): Promise<void> {
+  if (!fb || !user) return;
+  const keep = new Set(words.map((w) => w.id));
+  const { db, f } = fb;
+  const remoteIds: string[] = [];
+  try {
+    const snap = await f.getDocs(f.collection(db, 'users', user.uid, 'words'));
+    snap.forEach((d) => {
+      if (d.data().deleted !== true && !keep.has(d.id)) remoteIds.push(d.id);
+    });
+  } catch (e) {
+    console.warn('Sync: could not list cloud words; deleting the local ones only', e);
+  }
+  await pushDeletes([...new Set([...removedLocally, ...remoteIds])]);
+  await pushWords(words);
+}

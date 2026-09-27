@@ -41,7 +41,9 @@ export function DataScreen() {
       if (!incoming.length) throw new Error('The file contains no valid words.');
       if (
         importMode === 'replace' &&
-        !confirm(`Replace all ${words.length} existing words with ${incoming.length} words from “${file.name}”? This cannot be undone.`)
+        !confirm(
+          `Replace all ${words.length} existing words with the ${incoming.length} words from “${file.name}”? Words not in the file are deleted (on all your synced devices too). This cannot be undone.`,
+        )
       )
         return;
       const { added, skipped } = await importWords(incoming, importMode);
@@ -89,7 +91,7 @@ export function DataScreen() {
         <p className="hint">
           {importMode === 'merge'
             ? 'Adds new words; words already in your list (same hanzi) are skipped.'
-            : 'Deletes your current list and replaces it with the file’s words.'}
+            : 'Your list becomes exactly the file’s words, with the progress saved in the file. Everything else is deleted, on all synced devices too.'}
         </p>
         <button className="btn block" onClick={() => fileRef.current?.click()}>
           Import from JSON…

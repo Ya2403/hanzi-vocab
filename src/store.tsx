@@ -3,7 +3,7 @@ import * as db from './lib/db';
 import { today } from './lib/date';
 import { bumpStreak, emptyStreak } from './lib/streak';
 import { cleanInput, createWord } from './lib/words';
-import { initSync, pushDeletes, pushMeta, pushWords } from './lib/sync';
+import { initSync, pushDeletes, pushMeta, pushWords, replaceAllRemote } from './lib/sync';
 import type { DailyStats, StreakState, Word, WordInput } from './lib/types';
 
 export type ImportMode = 'merge' | 'replace';
@@ -94,12 +94,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const importWords = useCallback(
     async (incoming: Word[], mode: ImportMode) => {
       if (mode === 'replace') {
-        await db.putWords(incoming, true);
-        const kept = new Set(incoming.map((w) => w.id));
-        pushDeletes(words.filter((w) => !kept.has(w.id)).map((w) => w.id));
-        pushWords(incoming);
-        setWords(incoming);
-        return { added: incoming.length, skipped: 0 };
+        // The file becomes the whole list. Stamp every word as changed now so it wins over
+        // any version already on this or another device (progress from the file is kept).
+        const now = Date.now();
+        const stamped = incoming.map((w, i) => ({ ...w, updatedAt: now + i }));
+        await db.putWords(stamped, true);
+        wordsRef.current = stamped;
+        setWords(stamped);
+        const kept = new Set(stamped.map((w) => w.id));
+        replaceAllRemote(
+          stamped,
+          words.filter((w) => !kept.has(w.id)).map((w) => w.id),
+        ).catch((e) => console.error('Sync: replace failed', e));
+        return { added: stamped.length, skipped: 0 };
       }
       // Merge: keep existing words, add only those whose id and hanzi are both new.
       const ids = new Set(words.map((w) => w.id));
