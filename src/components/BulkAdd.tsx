@@ -1,13 +1,17 @@
 import { useDeferredValue, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { useStore } from '../store';
 import { BULK_PROMPT, parseBulk } from '../lib/bulk';
-import { parseTagText } from '../lib/words';
+import { createWord, parseTagText } from '../lib/words';
+import type { Word, WordInput } from '../lib/types';
+import { Segmented } from './Segmented';
 import { Modal } from './Modal';
 
 const PREVIEW_LIMIT = 200;
 
 export function BulkAdd({ onClose }: { onClose(): void }) {
-  const { words, addWords } = useStore();
+  const { words, addWords, updateWords, importWords } = useStore();
+  /** What to do with pasted words that are already in the list. */
+  const [mode, setMode] = useState<'new' | 'update' | 'replace'>('new');
   const [text, setText] = useState('');
   const [extraTags, setExtraTags] = useState('');
   const [copied, setCopied] = useState<'ok' | 'failed' | null>(null);
@@ -30,7 +34,13 @@ export function BulkAdd({ onClose }: { onClose(): void }) {
     });
   }, [rows, words]);
   const fresh = preview.filter((r) => r.status === 'new');
-  const skipped = preview.length - fresh.length;
+  const existingRows = preview.filter((r) => r.status === 'exists');
+  const byHanzi = useMemo(() => new Map(words.map((w) => [w.hanzi, w])), [words]);
+  const pasted = new Set(preview.map((r) => r.word.hanzi));
+  // Replace: every current word that isn't in the pasted list gets deleted.
+  const toDelete = mode === 'replace' ? words.filter((w) => !pasted.has(w.hanzi)).length : 0;
+  const skipped = mode === 'new' ? preview.length - fresh.length : preview.length - fresh.length - existingRows.length;
+  const count = mode === 'new' ? fresh.length : fresh.length + existingRows.length;
 
   const copyPrompt = async () => {
     try {
@@ -61,8 +71,46 @@ export function BulkAdd({ onClose }: { onClose(): void }) {
     setSaving(true);
     setError(null);
     try {
-      const tags = parseTagText(extraTags);
-      await addWords(fresh.map((r) => ({ ...r.word, tags: [...r.word.tags, ...tags] })));
+      const extra = parseTagText(extraTags);
+      const input = (w: WordInput): WordInput => ({ ...w, tags: [...w.tags, ...extra] });
+      // An existing word gets the pasted content; its id, progress and notes stay. Empty pasted
+      // fields (example, tags) don't wipe what the word already has.
+      const merged = (w: Word, p: WordInput): Word => {
+        const newExample = p.example && p.example !== w.example;
+        return {
+          ...w,
+          pinyin: p.pinyin || w.pinyin,
+          meaning: p.meaning || w.meaning,
+          example: p.example || w.example,
+          exampleTranslation: newExample ? undefined : w.exampleTranslation,
+          exampleRef: newExample ? undefined : w.exampleRef,
+          tags: p.tags.length ? [...p.tags, ...extra] : [...w.tags, ...extra],
+        };
+      };
+      if (mode === 'new') {
+        await addWords(fresh.map((r) => input(r.word)));
+      } else if (mode === 'update') {
+        await updateWords(existingRows.map((r) => merged(byHanzi.get(r.word.hanzi)!, r.word)));
+        if (fresh.length) await addWords(fresh.map((r) => input(r.word)));
+      } else {
+        const ok = confirm(
+          `Replace your whole list with these ${count} words? ${toDelete} word${toDelete === 1 ? '' : 's'} not in this list will be deleted (on all synced devices too). Words already in your list keep their progress.`,
+        );
+        if (!ok) {
+          setSaving(false);
+          return;
+        }
+        const now = Date.now();
+        const list: Word[] = [];
+        const seen = new Set<string>();
+        preview.forEach((r, i) => {
+          if (seen.has(r.word.hanzi)) return; // repeats in the pasted text
+          seen.add(r.word.hanzi);
+          const old = byHanzi.get(r.word.hanzi);
+          list.push(old ? merged(old, r.word) : createWord(input(r.word), now + i));
+        });
+        await importWords(list, 'replace');
+      }
       onClose();
     } catch (e) {
       console.error(e);
@@ -122,6 +170,24 @@ export function BulkAdd({ onClose }: { onClose(): void }) {
           <span className="hint">One word per line: hanzi | pinyin | meaning | example | tags. Missing pinyin is generated.</span>
         </div>
 
+        <Segmented
+          label="Words already in your list"
+          value={mode}
+          onChange={setMode}
+          options={[
+            { value: 'new', label: 'Skip them' },
+            { value: 'update', label: 'Update them' },
+            { value: 'replace', label: 'Replace whole list' },
+          ]}
+        />
+        <p className="hint">
+          {mode === 'new'
+            ? 'Only words that aren’t in your list yet are added.'
+            : mode === 'update'
+              ? 'New words are added; existing ones get the pasted pinyin, meaning, example and tags. Study progress is kept.'
+              : 'Your list becomes exactly these words, on all synced devices. Existing ones keep their progress; everything else is deleted.'}
+        </p>
+
         <label className="field">
           <span className="field-label">
             Add tags to all <span className="optional">optional</span>
@@ -133,7 +199,14 @@ export function BulkAdd({ onClose }: { onClose(): void }) {
           <div className="bulk-preview">
             <p className="small">
               <b>{fresh.length}</b> new
-              {skipped > 0 && <span className="muted"> · {skipped} already in your list (skipped)</span>}
+              {existingRows.length > 0 &&
+                (mode === 'new' ? (
+                  <span className="muted"> · {existingRows.length} already in your list (skipped)</span>
+                ) : (
+                  <span> · {existingRows.length} already in your list (updated, progress kept)</span>
+                ))}
+              {mode !== 'new' && skipped > 0 && <span className="muted"> · {skipped} repeated (skipped)</span>}
+              {mode === 'replace' && toDelete > 0 && <span className="warn-text"> · {toDelete} other words will be deleted</span>}
               {errors.length > 0 && <span className="warn-text"> · {errors.length} line{errors.length > 1 ? 's' : ''} not understood</span>}
             </p>
             {errors.length > 0 && (
@@ -169,8 +242,12 @@ export function BulkAdd({ onClose }: { onClose(): void }) {
           <button type="button" className="btn ghost" onClick={onClose}>
             Cancel
           </button>
-          <button type="button" className="btn primary" disabled={!fresh.length || saving} onClick={add}>
-            Add {fresh.length || ''} word{fresh.length === 1 ? '' : 's'}
+          <button type="button" className={`btn primary ${mode === 'replace' ? 'danger-btn' : ''}`} disabled={!count || saving} onClick={add}>
+            {mode === 'replace'
+              ? `Replace list (${count} words)`
+              : mode === 'update' && existingRows.length
+                ? `Add ${fresh.length} · update ${existingRows.length}`
+                : `Add ${fresh.length || ''} word${fresh.length === 1 ? '' : 's'}`}
           </button>
         </div>
       </div>

@@ -2342,3 +2342,8 @@ body.in-session .content {
 .sync-state.error {
   color: var(--bad);
 }
+
+.btn.primary.danger-btn {
+  background: var(--bad);
+  border-color: var(--bad);
+}
