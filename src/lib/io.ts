@@ -1,11 +1,12 @@
 import { isValidDateStr, today } from './date';
-import { newSrs } from './srs';
+import { migrateLegacySrs, newSrs } from './srs';
 import { toPinyin } from './pinyin';
 import { newId, normalizeTags } from './words';
-import type { SrsState, Word } from './types';
+import { SKILLS, type SkillState, type Skills, type Word } from './types';
 
 const FORMAT = 'hanzi-vocab';
-const VERSION = 1;
+/** 2: per-skill schedules (`skills`). Version 1 files (one `srs` schedule) are migrated on import. */
+const VERSION = 2;
 
 export function exportWords(words: Word[]): void {
   const data = { format: FORMAT, version: VERSION, exportedAt: new Date().toISOString(), words };
@@ -50,15 +51,37 @@ const str = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
 const num = (v: unknown, fallback: number): number =>
   typeof v === 'number' && Number.isFinite(v) ? v : fallback;
 
-function normalizeWord(raw: unknown, fallbackTime: number): Word | null {
+/**
+ * Validate and fill in one word (from a file, the local database or another device). Words
+ * from before skills (a single `srs` schedule) are migrated: see migrateLegacySrs.
+ */
+export function normalizeWord(raw: unknown, fallbackTime: number = Date.now(), on: string = today()): Word | null {
   if (!raw || typeof raw !== 'object') return null;
   const r = raw as Record<string, unknown>;
   const hanzi = str(r.hanzi);
   const meaning = str(r.meaning);
   if (!hanzi || !meaning) return null;
   const tags = Array.isArray(r.tags) ? r.tags.filter((t): t is string => typeof t === 'string') : [];
+  const id = str(r.id) || newId();
+  let skills: Skills;
+  let learnedOn = isValidDateStr(r.learnedOn) ? r.learnedOn : undefined;
+  if (r.skills && typeof r.skills === 'object') {
+    skills = {};
+    for (const k of SKILLS) {
+      const v = (r.skills as Record<string, unknown>)[k];
+      if (v && typeof v === 'object') {
+        const { learnedOn: _legacy, ...state } = normalizeSrs(v);
+        skills[k] = state;
+      }
+    }
+  } else {
+    const legacy = normalizeSrs(r.srs);
+    const m = migrateLegacySrs(id, hanzi, legacy, on);
+    skills = m.skills;
+    learnedOn ??= m.learnedOn;
+  }
   return {
-    id: str(r.id) || newId(),
+    id,
     hanzi,
     pinyin: str(r.pinyin) || toPinyin(hanzi),
     meaning,
@@ -69,14 +92,20 @@ function normalizeWord(raw: unknown, fallbackTime: number): Word | null {
     tags: normalizeTags(tags),
     createdAt: num(r.createdAt, fallbackTime),
     updatedAt: num(r.updatedAt, fallbackTime),
-    srs: normalizeSrs(r.srs),
+    skills,
+    learnedOn: skills.meaning ? learnedOn : undefined,
+    toneErrors: typeof r.toneErrors === 'number' && r.toneErrors > 0 ? Math.round(r.toneErrors) : undefined,
   };
 }
 
-function normalizeSrs(raw: unknown): SrsState {
+/** Stored or synced words written before skills existed need migrating. */
+export const isLegacyWord = (w: unknown): boolean => !!w && typeof w === 'object' && !('skills' in w);
+
+function normalizeSrs(raw: unknown): SkillState & { learnedOn?: string } {
   const base = newSrs();
   if (!raw || typeof raw !== 'object') return base;
   const r = raw as Record<string, unknown>;
+  const count = (v: unknown) => (typeof v === 'number' ? Math.max(0, Math.round(v)) : undefined);
   return {
     ease: Math.max(1.3, num(r.ease, base.ease)),
     interval: Math.max(0, Math.round(num(r.interval, 0))),
@@ -84,13 +113,13 @@ function normalizeSrs(raw: unknown): SrsState {
     lapses: Math.max(0, Math.round(num(r.lapses, 0))),
     due: isValidDateStr(r.due) ? r.due : base.due,
     lastReviewed: isValidDateStr(r.lastReviewed) ? r.lastReviewed : undefined,
-    successes: typeof r.successes === 'number' ? Math.max(0, Math.round(r.successes)) : undefined,
-    answered: typeof r.answered === 'number' ? Math.max(0, Math.round(r.answered)) : undefined,
-    correct: typeof r.correct === 'number' ? Math.max(0, Math.round(r.correct)) : undefined,
+    answered: count(r.answered),
+    correct: count(r.correct),
     recent: typeof r.recent === 'string' && /^[01]{0,5}$/.test(r.recent) ? r.recent : undefined,
     lastSeen: typeof r.lastSeen === 'number' ? r.lastSeen : undefined,
-    learnedOn: isValidDateStr(r.learnedOn) ? r.learnedOn : undefined,
     leech: r.leech === true || undefined,
-    lapsesAtUnmark: typeof r.lapsesAtUnmark === 'number' ? Math.max(0, Math.round(r.lapsesAtUnmark)) : undefined,
+    lapsesAtUnmark: count(r.lapsesAtUnmark),
+    // Legacy single schedules kept the learned date here.
+    learnedOn: isValidDateStr(r.learnedOn) ? r.learnedOn : undefined,
   };
 }

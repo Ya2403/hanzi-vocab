@@ -27,8 +27,8 @@ export interface Settings {
   learnDailyLimit: number;
   /** Learn mode: finish each batch with a typing round. */
   learnTyping: boolean;
-  /** Review: add a writing card for words with at least this many successful reviews (0 = never). */
-  writingAfterReviews: number;
+  /** Writing skill: once a word's recall interval reaches 6 days, it is also reviewed by writing from memory. */
+  writingPractice: boolean;
   /** A word becomes a leech after this many lapses. */
   leechThreshold: number;
   /** Pinyin on practice question sides and under example sentences. */
@@ -59,7 +59,7 @@ const defaults: Settings = {
   learnBatchSize: 6,
   learnDailyLimit: 15,
   learnTyping: false,
-  writingAfterReviews: 3,
+  writingPractice: false,
   leechThreshold: 5,
   showPinyin: true,
   pinyinAfterAnswer: true,

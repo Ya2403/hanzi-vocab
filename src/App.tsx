@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useStore } from './store';
 import { today } from './lib/date';
-import { isDue, isNew } from './lib/srs';
+import { useSettings } from './lib/settings';
+import { dueItems } from './lib/planner';
 import { liveStreak } from './lib/streak';
 import { Icon, type IconName } from './components/Icon';
 import { WordsScreen } from './screens/WordsScreen';
@@ -40,9 +41,11 @@ export default function App() {
     window.scrollTo(0, 0);
   };
 
+  // Re-render when settings change ("Writing practice" changes what is due).
+  useSettings();
   const on = today();
   // New words are taught in Learn, so they never count as due for Review.
-  const dueCount = words.filter((w) => isDue(w, on) && !isNew(w)).length;
+  const dueCount = dueItems(words, on).length;
   const streakDays = liveStreak(streak, on);
   const doneToday = streak.lastDate === on;
 

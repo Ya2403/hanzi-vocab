@@ -3,7 +3,7 @@ import { useStore } from '../store';
 import { Modal } from './Modal';
 
 /** Shown the moment a word becomes a leech: offer to add a memory trick right away. */
-export function LeechPrompt({ wordId, lapses, onClose }: { wordId: string; lapses: number; onClose(): void }) {
+export function LeechPrompt({ wordId, lapses, skill, onClose }: { wordId: string; lapses: number; skill?: string; onClose(): void }) {
   const { words, updateWord } = useStore();
   const word = words.find((w) => w.id === wordId);
   const [editing, setEditing] = useState(false);
@@ -23,7 +23,7 @@ export function LeechPrompt({ wordId, lapses, onClose }: { wordId: string; lapse
     <Modal title="🐛 Leech" onClose={onClose}>
       <div className="form">
         <p>
-          You’ve missed <b lang="zh-CN">{word.hanzi}</b> ({word.meaning}) {lapses} times. Add a memory trick?
+          You’ve missed <b lang="zh-CN">{word.hanzi}</b> ({word.meaning}) {lapses} times{skill && ` (${skill.toLowerCase()})`}. Add a memory trick?
         </p>
         {editing ? (
           <>

@@ -4,6 +4,7 @@ import { isLessonTag } from '../lib/planner';
 import { isDueLearned, isLearned, isLeech, LEECH_FILTER } from '../lib/srs';
 import type { Word } from '../lib/types';
 import { tagLabel } from './TagPicker';
+import { useSettings } from '../lib/settings';
 
 interface Chip {
   tag: string;
@@ -28,6 +29,7 @@ export function TagFilter({
   showDue?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const { writingPractice } = useSettings();
   const on = today();
 
   const { lessons, topics } = useMemo(() => {
@@ -44,7 +46,7 @@ export function TagFilter({
       lessons: chips.filter((c) => isLessonTag(c.tag)),
       topics: [...(leeches.length ? [chip(LEECH_FILTER, leeches)] : []), ...chips.filter((c) => !isLessonTag(c.tag))],
     };
-  }, [words, on]);
+  }, [words, on, writingPractice]);
 
   if (!lessons.length && !topics.length) return null;
 

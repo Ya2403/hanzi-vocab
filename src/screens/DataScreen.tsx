@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { useStore, type ImportMode } from '../store';
 import { today } from '../lib/date';
 import { exportWords, parseImport } from '../lib/io';
-import { isDueLearned, isLeech, isNew, LEECH_FILTER } from '../lib/srs';
+import { isDueLearned, isLearned, isLeech, isNew, LEECH_FILTER } from '../lib/srs';
+import { strength } from '../lib/planner';
 import { liveStreak } from '../lib/streak';
 import { updateSettings, useSettings } from '../lib/settings';
 import { hasChineseVoice, onVoicesChanged, speak, speechSupported } from '../lib/speech';
@@ -28,7 +29,7 @@ export function DataScreen() {
   useEffect(() => onVoicesChanged(() => setVoiceOk(hasChineseVoice())), []);
 
   const learned = words.filter((w) => !isNew(w)).length;
-  const mature = words.filter((w) => w.srs.interval >= 21).length;
+  const mature = words.filter((w) => isLearned(w) && strength(w) === 'veryStrong').length;
   const leeches = words.filter(isLeech).length;
   const due = words.filter((w) => isDueLearned(w)).length;
 
@@ -273,7 +274,7 @@ function Stat({ value, label }: { value: number; label: string }) {
 }
 
 function SettingsCard({ leechCount }: { leechCount: number }) {
-  const { showPinyin, pinyinAfterAnswer, listPinyin, leechThreshold, writingAfterReviews } = useSettings();
+  const { showPinyin, pinyinAfterAnswer, listPinyin, leechThreshold, writingPractice } = useSettings();
   return (
     <div className="card form">
       <h2>Settings</h2>
@@ -301,25 +302,19 @@ function SettingsCard({ leechCount }: { leechCount: number }) {
         <span>Show pinyin in the word list</span>
       </label>
 
-      <label className="field">
-        <span className="field-label">Writing practice in Review</span>
-        <div className="input-row">
-          <input
-            className="input narrow"
-            type="number"
-            min={0}
-            max={20}
-            value={writingAfterReviews}
-            onChange={(e) => {
-              const n = Math.round(Number(e.target.value));
-              if (n >= 0 && n <= 20) updateSettings({ writingAfterReviews: n });
-            }}
-          />
-          <span className="small muted">
-            {writingAfterReviews ? 'successful reviews before a word also gets a writing card' : 'off: no writing cards in Review'}
-          </span>
-        </div>
-      </label>
+      <Segmented
+        label="Writing practice"
+        value={writingPractice ? 'on' : 'off'}
+        onChange={(v) => updateSettings({ writingPractice: v === 'on' })}
+        options={[
+          { value: 'off', label: 'Off' },
+          { value: 'on', label: 'On' },
+        ]}
+      />
+      <p className="hint">
+        When on, a word also gets a writing skill (draw it from memory) once its recall interval reaches 6 days. Writing
+        reviews then have their own schedule.
+      </p>
 
       <label className="field">
         <span className="field-label">Leech threshold</span>

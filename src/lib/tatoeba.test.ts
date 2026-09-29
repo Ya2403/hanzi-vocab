@@ -34,7 +34,7 @@ const word = (hanzi: string, learned: boolean): Word => ({
   tags: [],
   createdAt: 0,
   updatedAt: 0,
-  srs: learned ? { ...newSrs(), reps: 1, interval: 1, lastReviewed: '2026-09-01' } : newSrs(),
+  skills: learned ? { meaning: { ...newSrs(), reps: 1, interval: 1, lastReviewed: '2026-09-01' } } : {},
 });
 
 describe('findSentences', () => {

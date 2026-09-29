@@ -11,7 +11,7 @@ const w = (id: string, updatedAt: number, extra: Partial<Word> = {}): Word => ({
   tags: [],
   createdAt: 0,
   updatedAt,
-  srs: newSrs('2026-09-27'),
+  skills: {},
   ...extra,
 });
 const map = (ws: Word[]) => new Map(ws.map((x) => [x.id, x]));
@@ -51,7 +51,7 @@ describe('planInitialPush', () => {
 
 describe('dedupeByHanzi', () => {
   it('keeps the copy studied most recently when the same word was added on two devices', () => {
-    const phone = w('p1', 100, { hanzi: '你好', srs: { ...newSrs(), reps: 2, lastReviewed: '2026-09-26' } });
+    const phone = w('p1', 100, { hanzi: '你好', skills: { meaning: { ...newSrs(), reps: 2, lastReviewed: '2026-09-26' } } });
     const tablet = w('t1', 200, { hanzi: '你好' });
     expect(dedupeByHanzi([phone, tablet]).drop.map((x) => x.id)).toEqual(['t1']);
   });

@@ -2,7 +2,7 @@ import { useEffect, useState, type MouseEvent } from 'react';
 import { applyReview, formatInterval, Grade } from '../lib/srs';
 import { getSettings, usePinyinVisibility } from '../lib/settings';
 import { speak } from '../lib/speech';
-import type { CardDirection, Word } from '../lib/types';
+import type { CardDirection, SkillState, Word } from '../lib/types';
 import { SpeakButton } from './SpeakButton';
 import { Breakdown } from './Breakdown';
 import { ExampleSentence, NotesBox } from './WordExtras';
@@ -12,10 +12,12 @@ interface Props {
   direction: CardDirection;
   /** Show the four SM-2 grades with interval previews instead of a simple Again / Got it. */
   graded: boolean;
+  /** The schedule being graded (for the interval previews). */
+  state?: SkillState;
   onAnswer(quality: number): void;
 }
 
-export function Flashcard({ word, direction, graded, onAnswer }: Props) {
+export function Flashcard({ word, direction, graded, state, onAnswer }: Props) {
   const [flipped, setFlipped] = useState(false);
   const pv = usePinyinVisibility(direction);
   const [revealed, setRevealed] = useState(false);
@@ -119,7 +121,7 @@ export function Flashcard({ word, direction, graded, onAnswer }: Props) {
           {buttons.map((b, i) => (
             <button key={b.label} className={`grade ${b.cls}`} onClick={() => onAnswer(b.q)}>
               <span>{b.label}</span>
-              <small>{graded ? formatInterval(applyReview(word.srs, b.q).interval) : `key ${i + 1}`}</small>
+              <small>{graded && state ? formatInterval(applyReview(state, b.q).interval) : `key ${i + 1}`}</small>
             </button>
           ))}
         </div>

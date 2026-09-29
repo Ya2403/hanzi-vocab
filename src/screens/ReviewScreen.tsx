@@ -2,20 +2,16 @@ import { useMemo, useState } from 'react';
 import { useStore } from '../store';
 import { formatDate, today } from '../lib/date';
 import { learnedToday } from '../lib/learn';
-import { pickPractice } from '../lib/planner';
-import { isDueLearned, isLearned, isNew } from '../lib/srs';
+import { dueItems, pickPractice } from '../lib/planner';
+import { isDueLearned, isLearned, isNew, nextDue } from '../lib/srs';
 import { liveStreak } from '../lib/streak';
 import { updateSettings, useSettings } from '../lib/settings';
-import { shuffle } from '../lib/words';
 import type { Word } from '../lib/types';
 import { Session } from '../components/Session';
 import { LearnSession } from '../components/LearnSession';
 import { modeAvailable, SessionOptions } from '../components/SessionOptions';
 import { TagFilter } from '../components/TagFilter';
 import { tagLabel, wordsInTags } from '../components/TagPicker';
-
-/** Most overdue first (shuffled within the same due date). */
-const reviewOrder = (list: Word[]) => shuffle(list).sort((a, b) => a.srs.due.localeCompare(b.srs.due));
 
 type Flow =
   | { phase: 'home' }
@@ -35,19 +31,25 @@ export function ReviewScreen({ onGoToWords, onGoToLearn }: { onGoToWords(): void
   const [tags, setTags] = useState<string[]>([]);
 
   const on = today();
-  const allDue = useMemo(() => words.filter((w) => isDueLearned(w, on)), [words, on]);
+  const allDue = useMemo(() => words.filter((w) => isDueLearned(w, on, settings.writingPractice)), [words, on, settings.writingPractice]);
   const newWords = useMemo(() => words.filter(isNew), [words]);
   const newLeft = Math.min(newWords.length, Math.max(0, settings.learnDailyLimit - learnedToday(words, on)));
   const learnedWords = words.filter(isLearned);
   const filteredDue = wordsInTags(allDue, tags);
+  // One review card per due skill.
+  const reviewCount = useMemo(() => dueItems(allDue, on).length, [allDue, on]); // allDue already reflects writingPractice
+  const filteredCount = dueItems(filteredDue, on).length;
   const reviewedToday = daily.date === on ? daily.reviews : 0;
   const mode = settings.autoExercise ? 'auto' : settings.reviewMode;
 
   const nextUp = useMemo(() => {
-    const upcoming = words.filter((w) => isLearned(w) && !isDueLearned(w, on)).map((w) => w.srs.due).sort();
+    const upcoming = words
+      .filter((w) => isLearned(w) && !isDueLearned(w, on))
+      .map((w) => nextDue(w, on)!)
+      .sort();
     if (!upcoming.length) return null;
     return { date: upcoming[0], count: upcoming.filter((d) => d === upcoming[0]).length };
-  }, [words, on]);
+  }, [words, on, settings.writingPractice]);
 
   const home = () => setFlow({ phase: 'home' });
   /** After reviews: new words (if any left today), else done. */
@@ -55,7 +57,7 @@ export function ReviewScreen({ onGoToWords, onGoToLearn }: { onGoToWords(): void
   const practiceMore = () => setFlow({ phase: 'practice', words: pickPractice(learnedWords, settings.practiceSize) });
 
   const continueFlow = () => {
-    if (allDue.length) setFlow({ phase: 'review', words: reviewOrder(allDue), title: 'Reviews', chain: true });
+    if (allDue.length) setFlow({ phase: 'review', words: allDue, title: 'Reviews', chain: true });
     else afterReviews();
   };
 
@@ -140,7 +142,7 @@ export function ReviewScreen({ onGoToWords, onGoToLearn }: { onGoToWords(): void
         ) : (
           <>
             <p className="continue-summary">
-              <b>{allDue.length}</b> review{allDue.length === 1 ? '' : 's'} · <b>{newLeft}</b> new word{newLeft === 1 ? '' : 's'} left today
+              <b>{reviewCount}</b> review{reviewCount === 1 ? '' : 's'} · <b>{newLeft}</b> new word{newLeft === 1 ? '' : 's'} left today
             </p>
             <button className="btn primary continue-btn" onClick={nothingLeft ? () => setFlow({ phase: 'done' }) : continueFlow}>
               {nothingLeft ? 'All done for today ✓' : 'Continue'}
@@ -185,13 +187,13 @@ export function ReviewScreen({ onGoToWords, onGoToLearn }: { onGoToWords(): void
               onClick={() =>
                 setFlow({
                   phase: 'review',
-                  words: reviewOrder(filteredDue),
+                  words: filteredDue,
                   title: tags.length ? `Review · ${tags.map(tagLabel).join(', ')}` : 'Reviews',
                   chain: false,
                 })
               }
             >
-              {filteredDue.length ? `Review ${filteredDue.length} due` : tags.length ? 'Nothing due in this selection' : 'Nothing due'}
+              {filteredDue.length ? `Review ${filteredCount} due (${filteredDue.length} word${filteredDue.length === 1 ? '' : 's'})` : tags.length ? 'Nothing due in this selection' : 'Nothing due'}
             </button>
           </div>
           <div className="setup-col">

@@ -1,3 +1,5 @@
+import { SKILL_LABEL } from '../lib/srs';
+import type { Skill } from '../lib/types';
 import { useState, type MouseEvent } from 'react';
 import { toPinyin } from '../lib/pinyin';
 import { tatoebaUrl } from '../lib/tatoeba';
@@ -56,10 +58,12 @@ export function NotesBox({ notes }: { notes?: string }) {
   );
 }
 
-export function LeechBadge() {
+/** 🐛 badge; with `skills`, names the skills that became leeches (e.g. "🐛 pinyin"). */
+export function LeechBadge({ skills }: { skills?: Skill[] }) {
+  const which = skills?.length ? skills.map((k) => SKILL_LABEL[k].toLowerCase()).join(", ") : "leech";
   return (
-    <span className="status leech" title="Leech: missed many times">
-      🐛 leech
+    <span className="status leech" title={`Leech: missed many times${skills?.length ? ` (${which})` : ""}`}>
+      🐛 {which}
     </span>
   );
 }

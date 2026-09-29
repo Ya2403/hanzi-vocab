@@ -3,6 +3,7 @@ import * as db from './lib/db';
 import { today } from './lib/date';
 import { bumpStreak, emptyStreak } from './lib/streak';
 import { cleanInput, createWord } from './lib/words';
+import { isLegacyWord, normalizeWord } from './lib/io';
 import { initSync, pushDeletes, pushMeta, pushWords, replaceAllRemote } from './lib/sync';
 import type { DailyStats, StreakState, Word, WordInput } from './lib/types';
 
@@ -35,7 +36,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     Promise.all([db.getAllWords(), db.getMeta('streak'), db.getMeta('daily')])
-      .then(([ws, st, dl]) => {
+      .then(async ([stored, st, dl]) => {
+        // Words saved before per-skill schedules: migrate once and store the result. Their
+        // updatedAt is kept, so the migration itself isn't pushed as an edit.
+        const legacy = stored.filter(isLegacyWord);
+        const migrated = legacy.map((w) => normalizeWord(w, w.updatedAt)).filter((w): w is Word => !!w);
+        if (migrated.length) await db.putWords(migrated);
+        const byId = new Map(migrated.map((w) => [w.id, w]));
+        const ws = stored.map((w) => byId.get(w.id) ?? w);
         setWords(ws);
         if (st) setStreak(st);
         if (dl) setDaily(dl);
@@ -151,7 +159,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (loading || error) return;
     initSync({
       getWords: () => wordsRef.current,
-      applyRemote: async (upserts, deleteIds) => {
+      applyRemote: async (incoming, deleteIds) => {
+        // A device still on an older version may send words without skills.
+        const upserts = incoming.map((w) => (isLegacyWord(w) ? (normalizeWord(w, w.updatedAt) ?? w) : w));
         if (upserts.length) await db.putWords(upserts);
         for (const id of deleteIds) await db.deleteWord(id);
         const byId = new Map(upserts.map((w) => [w.id, w]));

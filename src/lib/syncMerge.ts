@@ -4,7 +4,7 @@
  * Every word carries `updatedAt` (set on each edit/review); for the same word id the newer
  * version wins. Deleting leaves a tombstone so the deletion reaches other devices too.
  */
-import type { DailyStats, StreakState, Word } from './types';
+import type { DailyStats, SkillState, StreakState, Word } from './types';
 
 export interface Tombstone {
   id: string;
@@ -47,7 +47,13 @@ export function planInitialPush(local: Word[], remote: Map<string, RemoteDoc>): 
 export function dedupeByHanzi(words: Word[]): { drop: Word[] } {
   const best = new Map<string, Word>();
   const drop: Word[] = [];
-  const score = (w: Word) => [w.srs.lastReviewed ?? '', w.srs.reps, w.updatedAt] as const;
+  const states = (w: Word) => Object.values(w.skills ?? {}) as SkillState[];
+  const score = (w: Word) =>
+    [
+      states(w).reduce((m, s) => (s.lastReviewed && s.lastReviewed > m ? s.lastReviewed : m), ''),
+      states(w).reduce((n, s) => n + s.reps, 0),
+      w.updatedAt,
+    ] as const;
   const better = (a: Word, b: Word) => {
     const [sa, sb] = [score(a), score(b)];
     for (let i = 0; i < sa.length; i++) if (sa[i] !== sb[i]) return sa[i] > sb[i];

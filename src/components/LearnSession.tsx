@@ -1,17 +1,21 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../store';
 import { loadHanziDict, type HanziDict } from '../lib/hanziDict';
-import { isRadicalOnly, learnedSrs, learnedToday, nextBatch, planLearning, type LearnPlan } from '../lib/learn';
+import { isRadicalOnly, learnedToday, nextBatch, planLearning, type LearnPlan } from '../lib/learn';
+import { today } from '../lib/date';
 import { useSettings } from '../lib/settings';
-import { recordAnswer } from '../lib/srs';
+import { learnedSkills, newSrs, recordAnswer, type SkillStats } from '../lib/srs';
 import { shuffle } from '../lib/words';
-import type { Word } from '../lib/types';
+import type { Skill, Word } from '../lib/types';
 import { Icon } from './Icon';
 import { ListenChoice, listeningAvailable, TeachCard } from './LearnCards';
 import { MultipleChoice } from './MultipleChoice';
 import { Typing } from './Typing';
 
 type Round = 'meaning' | 'listen' | 'produce' | 'typing';
+
+/** The skill each round practises (its answers go into that skill's statistics). */
+const ROUND_SKILL: Record<Round, Skill> = { meaning: 'meaning', listen: 'pinyin', produce: 'recall', typing: 'recall' };
 
 const ROUND_LABEL: Record<Round, string> = {
   meaning: '中 → EN',
@@ -53,7 +57,7 @@ export function LearnSession({
   onFinish?(): void;
   finishLabel?: string;
 }) {
-  const { words, updateWord, updateWords, recordReview } = useStore();
+  const { words, updateWords, recordReview } = useStore();
   const { learnBatchSize, learnDailyLimit, learnTyping } = useSettings();
   const rounds = useMemo<Round[]>(
     () => ['meaning', ...(listeningAvailable ? (['listen'] as Round[]) : []), 'produce', ...(learnTyping ? (['typing'] as Round[]) : [])],
@@ -69,6 +73,8 @@ export function LearnSession({
   const [learned, setLearned] = useState<Word[]>([]);
   const [misses, setMisses] = useState(0);
   const [answered, setAnswered] = useState(0);
+  // Answers while learning, per word and skill; saved with the word when its batch is learned.
+  const stats = useRef(new Map<string, Partial<Record<Skill, SkillStats>>>());
 
   // Full-screen like other sessions.
   useEffect(() => {
@@ -111,12 +117,13 @@ export function LearnSession({
   const others = words.filter((w) => !batch.some((b) => b.id === w.id));
   const taughtSoFar = (i: number) => [...learned, ...batch.slice(0, i)];
 
-  /** Every Learn answer counts toward the streak and the word's accuracy statistics. */
-  const count = (w: Word, q: number) => {
+  /** Every Learn answer counts toward the streak and the skill's accuracy statistics. */
+  const count = (w: Word, q: number, skill: Skill) => {
     setAnswered((n) => n + 1);
     recordReview().catch(() => {});
-    const live = liveWord(w);
-    updateWord({ ...live, srs: recordAnswer(live.srs, q >= 3) }).catch(() => {});
+    const byWord = stats.current.get(w.id) ?? {};
+    const { answered, correct, recent, lastSeen } = recordAnswer({ ...newSrs(), ...byWord[skill] }, q >= 3);
+    stats.current.set(w.id, { ...byWord, [skill]: { answered, correct, recent, lastSeen } });
   };
 
   const startRound = (r: number) => {
@@ -132,12 +139,9 @@ export function LearnSession({
   };
 
   const finishBatch = () => {
-    const on = learnedSrs();
+    const on = today();
     // Keep the answer statistics gathered while learning.
-    const done = batch.map((w) => {
-      const { answered, correct, recent, lastSeen } = liveWord(w).srs;
-      return { ...liveWord(w), srs: { ...on, answered, correct, recent, lastSeen } };
-    });
+    const done = batch.map((w) => ({ ...liveWord(w), skills: learnedSkills(w, stats.current.get(w.id), on), learnedOn: on }));
     updateWords(done).catch((e) => console.error('Failed to save learned words', e));
     setLearned((l) => [...l, ...done]);
     setRemaining((rem) => {
@@ -255,7 +259,7 @@ export function LearnSession({
             allWords={withFill(taughtSoFar(stage.i), others, 3)}
             direction="zh-en"
             onAnswer={(q) => {
-              count(w, q);
+              count(w, q, 'meaning');
               if (q < 3) setMisses((m) => m + 1);
               if (stage.i + 1 < batch.length) {
                 setStage({ kind: 'teach', i: stage.i + 1 });
@@ -274,7 +278,7 @@ export function LearnSession({
   const roundPool = withFill(batch, others, 4);
   const inRound = batch.filter((b) => roundApplies(round, b)).length;
   const answer = (q: number) => {
-    count(w, q);
+    count(w, q, ROUND_SKILL[round]);
     const [head, ...rest] = stage.queue;
     if (q < 3) setMisses((m) => m + 1);
     const queue = q < 3 ? [...rest, head] : rest; // misses come back later in the same round

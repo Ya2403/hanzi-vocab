@@ -1,4 +1,3 @@
-import { newSrs } from './srs';
 import type { Word, WordInput } from './types';
 
 export function newId(): string {
@@ -24,7 +23,7 @@ export function cleanInput(input: WordInput): WordInput {
 
 /** `createdAt` can be given so words added together keep their order (Learn mode teaches in added order). */
 export function createWord(input: WordInput, createdAt: number = Date.now()): Word {
-  return { id: newId(), ...cleanInput(input), createdAt, updatedAt: createdAt, srs: newSrs() };
+  return { id: newId(), ...cleanInput(input), createdAt, updatedAt: createdAt, skills: {} };
 }
 
 export function normalizeTags(tags: string[]): string[] {

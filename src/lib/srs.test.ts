@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyReview, Grade, leechLapses, newSrs, reviewWithLeech, unmarkLeech } from './srs';
+import { applyReview, Grade, leechLapses, newSrs, reviewWithLeech, unmarkLeechSkill } from './srs';
 import type { SrsState } from './types';
 
 const DAY = '2026-09-24';
@@ -47,7 +47,7 @@ describe('leeches', () => {
   });
 
   it('after unmarking, needs a full threshold of new lapses to flag again', () => {
-    let s = unmarkLeech({ ...graduated(), lapses: 5, leech: true });
+    let s = unmarkLeechSkill({ ...graduated(), lapses: 5, leech: true });
     expect(s.leech).toBe(false);
     expect(leechLapses(s)).toBe(0);
     const flags: boolean[] = [];

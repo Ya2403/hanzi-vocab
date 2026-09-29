@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { HanziDict } from './hanziDict';
-import { isRadicalOnly, learnedSrs, nextBatch, planLearning, wordsSimilar } from './learn';
-import { applyReview, Grade, isNew, newSrs } from './srs';
+import { isRadicalOnly, nextBatch, planLearning, wordsSimilar } from './learn';
+import { isNew, learnedSkills } from './srs';
 import type { Word } from './types';
 
 // Minimal Make Me a Hanzi-style entries: [definition, pinyin, decomposition, radical].
@@ -27,7 +27,7 @@ const w = (hanzi: string, tags: string[] = []): Word => ({
   tags,
   createdAt: ++t,
   updatedAt: 0,
-  srs: newSrs(),
+  skills: {},
 });
 
 describe('planLearning', () => {
@@ -70,19 +70,20 @@ describe('nextBatch', () => {
 });
 
 describe('learned state', () => {
-  it('is not new anymore and is first due tomorrow', () => {
-    const s = learnedSrs('2026-09-27');
-    expect(isNew({ ...w('好'), srs: s })).toBe(false);
-    expect(s.due).toBe('2026-09-28');
-    expect(s.learnedOn).toBe('2026-09-27');
+  it('is not new anymore and every skill is first due tomorrow', () => {
+    const skills = learnedSkills({ hanzi: '好' }, {}, '2026-09-27');
+    expect(isNew({ ...w('好'), skills })).toBe(false);
+    expect(Object.keys(skills)).toEqual(['meaning', 'pinyin', 'recall']);
+    expect(Object.values(skills).map((x) => x!.due)).toEqual(['2026-09-28', '2026-09-28', '2026-09-28']);
   });
 
-  it('counts successful reviews (for the extra writing card)', () => {
-    let s = learnedSrs('2026-09-27');
-    s = applyReview(s, Grade.Good, '2026-09-28');
-    s = applyReview(s, Grade.Again, '2026-09-29');
-    s = applyReview(s, Grade.Hard, '2026-09-30');
-    expect(s.successes).toBe(2);
+  it('keeps the answers given while learning', () => {
+    const skills = learnedSkills({ hanzi: '好' }, { pinyin: { answered: 3, correct: 2, recent: '101' } }, '2026-09-27');
+    expect([skills.pinyin!.answered, skills.pinyin!.recent, skills.meaning!.answered]).toEqual([3, '101', undefined]);
+  });
+
+  it('gives radical-only entries meaning and recall only', () => {
+    expect(Object.keys(learnedSkills({ hanzi: '氵' }))).toEqual(['meaning', 'recall']);
   });
 });
 

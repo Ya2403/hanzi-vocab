@@ -2,7 +2,8 @@ import { useMemo, useState, type FormEvent } from 'react';
 import { useStore } from '../store';
 import { toPinyin } from '../lib/pinyin';
 import { parseTagText } from '../lib/words';
-import { formatInterval, isLeech, isNew, newSrs, unmarkLeech } from '../lib/srs';
+import { isLeech, isNew, leechSkills, unmarkLeech } from '../lib/srs';
+import { SkillTable } from './SkillTable';
 import { LeechBadge } from './WordExtras';
 import type { Word } from '../lib/types';
 import { Modal } from './Modal';
@@ -30,8 +31,8 @@ export function WordForm({ word, onClose }: { word?: Word; onClose(): void }) {
 
   const resetProgress = () => {
     if (!live) return;
-    if (confirm(`Reset all review progress for “${live.hanzi}”? It will be treated as a new word, and its lapse count and leech mark are cleared.`))
-      updateWord({ ...live, srs: newSrs() });
+    if (confirm(`Reset all review progress for “${live.hanzi}”? It will be treated as a new word (learn it again in Learn), and all its skills, lapse counts and leech marks are cleared.`))
+      updateWord({ ...live, skills: {}, learnedOn: undefined, toneErrors: undefined });
   };
   const [tagText, setTagText] = useState(word?.tags.join(', ') ?? '');
   const [saving, setSaving] = useState(false);
@@ -196,17 +197,11 @@ export function WordForm({ word, onClose }: { word?: Word; onClose(): void }) {
           <div className="field">
             <span className="field-label">Progress</span>
             <div className="progress-box small">
-              <span>
-                {isLeech(live) && (
-                  <>
-                    <LeechBadge />{' '}
-                  </>
-                )}
-                Forgotten {live.srs.lapses}× · {live.srs.reps} correct in a row · interval {formatInterval(live.srs.interval)}
-              </span>
+              {isLeech(live) && <LeechBadge skills={leechSkills(live)} />}
+              <SkillTable word={live} />
               <div className="row">
                 {isLeech(live) && (
-                  <button type="button" className="btn small-btn" onClick={() => updateWord({ ...live, srs: unmarkLeech(live.srs) })}>
+                  <button type="button" className="btn small-btn" onClick={() => updateWord(unmarkLeech(live))}>
                     Unmark leech
                   </button>
                 )}

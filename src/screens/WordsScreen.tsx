@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react';
 import { useStore } from '../store';
 import { formatDate, today } from '../lib/date';
 import { normalizeSearch, toPinyin } from '../lib/pinyin';
-import { isDue, isLeech, isNew, LEECH_FILTER } from '../lib/srs';
+import { isDueLearned, isLeech, isNew, leechSkills, LEECH_FILTER, nextDue } from '../lib/srs';
+import { strength, type Strength } from '../lib/planner';
 import { updateSettings, useSettings } from '../lib/settings';
 import { LeechBadge } from '../components/WordExtras';
 import { sampleWords } from '../lib/sample';
@@ -45,7 +46,7 @@ export function WordsScreen() {
     const cmp: Record<Sort, (a: Word, b: Word) => number> = {
       newest: (a, b) => b.createdAt - a.createdAt,
       oldest: (a, b) => a.createdAt - b.createdAt,
-      due: (a, b) => a.srs.due.localeCompare(b.srs.due),
+      due: (a, b) => (nextDue(a) ?? '9999').localeCompare(nextDue(b) ?? '9999'),
       pinyin: (a, b) => normalizeSearch(a.pinyin).localeCompare(normalizeSearch(b.pinyin)),
     };
     return list.sort(cmp[sort]);
@@ -170,6 +171,8 @@ export function WordsScreen() {
   );
 }
 
+const STRENGTH_LABEL: Record<Strength, string> = { weak: 'weak', medium: 'medium', strong: 'strong', veryStrong: 'very strong' };
+
 function WordRow({
   word,
   showPinyin,
@@ -185,10 +188,13 @@ function WordRow({
 }) {
   const status = isNew(word) ? (
     <span className="status new">new</span>
-  ) : isDue(word) ? (
-    <span className="status due">due</span>
   ) : (
-    <span className="status">{word.srs.due === today() ? 'today' : formatDate(word.srs.due)}</span>
+    <>
+      <span className={`status strength ${strength(word)}`} title="Strength of the weakest skill">
+        {STRENGTH_LABEL[strength(word)]}
+      </span>
+      {isDueLearned(word) ? <span className="status due">due</span> : <span className="status">{formatDate(nextDue(word) ?? today())}</span>}
+    </>
   );
 
   return (
@@ -205,7 +211,7 @@ function WordRow({
           </div>
         )}
         <div className="word-meta">
-          {isLeech(word) && <LeechBadge />}
+          {isLeech(word) && <LeechBadge skills={leechSkills(word)} />}
           {status}
           {word.tags.map((t) => (
             <span key={t} className="tag">

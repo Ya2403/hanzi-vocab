@@ -1,7 +1,7 @@
-import { addDays, today } from './date';
+import { today } from './date';
 import { deepComponents, type HanziDict } from './hanziDict';
 import { writableChars } from './strokes';
-import type { SrsState, Word } from './types';
+import type { Word } from './types';
 
 // ---------- Radical-only entries ----------
 
@@ -127,9 +127,4 @@ export function nextBatch(plan: LearnPlan, remaining: Set<string>, size: number,
 
 // ---------- Learned state ----------
 
-/** SM-2 state for a word just learned in Learn mode: first review tomorrow. */
-export function learnedSrs(on: string = today()): SrsState {
-  return { ease: 2.5, interval: 1, reps: 1, lapses: 0, successes: 0, due: addDays(on, 1), lastReviewed: on, learnedOn: on };
-}
-
-export const learnedToday = (words: Word[], on: string = today()) => words.filter((w) => w.srs.learnedOn === on).length;
+export const learnedToday = (words: Word[], on: string = today()) => words.filter((w) => w.learnedOn === on).length;

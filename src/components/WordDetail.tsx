@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '../store';
-import { formatDate, today } from '../lib/date';
+import { formatDate } from '../lib/date';
 import { useSettings } from '../lib/settings';
-import { accuracy, formatInterval, isDue, isLeech, isNew } from '../lib/srs';
+import { isDueLearned, isLeech, isNew, leechSkills, nextDue } from '../lib/srs';
+import { SkillTable } from './SkillTable';
 import type { Word } from '../lib/types';
 import { Breakdown } from './Breakdown';
 import { Icon } from './Icon';
@@ -33,12 +34,12 @@ export function WordDetail({ word: initial, onClose, onEdit }: { word: Word; onC
     await deleteWord(word.id);
   };
 
-  const s = word.srs;
+  const due = nextDue(word);
   const status = isNew(word)
     ? 'New: not learned yet (learn it in the Learn tab)'
-    : isDue(word)
+    : isDueLearned(word)
       ? 'Due for review today'
-      : `Next review ${s.due === today() ? 'today' : formatDate(s.due)}`;
+      : `Next review ${due ? formatDate(due) : '–'}`;
 
   return (
     <Modal title="Word" onClose={onClose}>
@@ -80,31 +81,12 @@ export function WordDetail({ word: initial, onClose, onEdit }: { word: Word; onC
         <div className="detail-progress small">
           {isLeech(word) && (
             <>
-              <LeechBadge />{' '}
+              <LeechBadge skills={leechSkills(word)} />{' '}
             </>
           )}
           <b>{status}</b>
-          {!isNew(word) && (
-            <span className="muted">
-              {' '}
-              · interval {formatInterval(s.interval)} · {s.reps} correct in a row · forgotten {s.lapses}× · ease {s.ease.toFixed(2)}
-            </span>
-          )}
-          {s.answered ? (
-            <div className="muted accuracy-line">
-              Accuracy {Math.round((accuracy(s) ?? 0) * 100)}% ({s.correct ?? 0}/{s.answered})
-              {s.recent && (
-                <>
-                  {" · last "}{s.recent.length}:{" "}
-                  {[...s.recent].map((r, i) => (
-                    <span key={i} className={r === "1" ? "acc-ok" : "acc-bad"}>
-                      {r === "1" ? "✓" : "✗"}
-                    </span>
-                  ))}
-                </>
-              )}
-            </div>
-          ) : null}
+          {word.toneErrors ? <span className="muted"> · {word.toneErrors} tone error{word.toneErrors === 1 ? '' : 's'}</span> : null}
+          <SkillTable word={word} />
         </div>
 
         <Breakdown word={word} pinyinVisible={pinyinShown} onOpenWord={(w) => setStack((st) => [...st, w.id])} />
