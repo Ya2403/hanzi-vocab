@@ -1,6 +1,7 @@
 import { updateSettings, useSettings } from '../lib/settings';
 import type { Direction, PracticeMode } from '../lib/types';
 import { Segmented } from './Segmented';
+import { TraceOptions } from './TraceOptions';
 
 export const MIN_CHOICE_WORDS = 4;
 
@@ -20,7 +21,7 @@ export function SessionOptions({
   onDirection(d: Direction): void;
   totalWords: number;
 }) {
-  const { writingOutline, writingStyle, sentenceSource, choiceStyle } = useSettings();
+  const { writingStyle, sentenceSource, choiceStyle } = useSettings();
   return (
     <>
       <Segmented
@@ -67,10 +68,7 @@ export function SessionOptions({
               { value: 'free', label: 'Free draw' },
             ]}
           />
-          <label className="toggle">
-            <input type="checkbox" checked={writingOutline} onChange={(e) => updateSettings({ writingOutline: e.target.checked })} />
-            <span>Tracing mode: show a faint outline of the character</span>
-          </label>
+          <TraceOptions />
           <p className="hint">
             {writingStyle === 'free'
               ? 'Draw the whole character in any order, then tap Check. You get a score, with missing and extra strokes highlighted.'

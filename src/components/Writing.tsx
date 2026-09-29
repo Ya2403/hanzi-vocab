@@ -2,16 +2,31 @@ import { autoSpeak } from '../lib/quiet';
 import { useEffect, useRef, useState } from 'react';
 import HanziWriter from 'hanzi-writer';
 import { Grade } from '../lib/srs';
-import { useSettings } from '../lib/settings';
 import { charDataLoader, writableChars } from '../lib/strokes';
 import type { Word } from '../lib/types';
 import { BOARD_PADDING, CharSlots, cssVar, MAX_BOARD_SIZE, RiceGrid, WritingPrompt, WritingStyleToggle } from './writingParts';
 
+export interface WritingAttempt {
+  /** Stroke by stroke: mistakes made. */
+  mistakes?: number;
+  /** Free draw: the verdict. */
+  verdict?: 'correct' | 'close' | 'wrong';
+  gaveUp?: boolean;
+}
+
 interface Props {
   word: Word;
-  onAnswer(quality: number): void;
+  onAnswer(quality: number, attempt?: WritingAttempt): void;
   /** Leave the card ungraded (e.g. stroke data unavailable offline). */
   onSkip(): void;
+  /** Only these characters (the writing flow goes one character at a time). Default: the whole word. */
+  chars?: string[];
+  /** Show the faint outline to trace over. */
+  outline?: boolean;
+  /** Prompt heading, e.g. "Trace it" or "Write from memory". */
+  label?: string;
+  /** Continue by itself when done (tracing is not graded). */
+  autoAdvance?: boolean;
 }
 
 type Status = 'loading' | 'writing' | 'animating' | 'done' | 'error';
@@ -24,9 +39,8 @@ function gradeFor(mistakes: number, chars: number, helped: boolean, gaveUp: bool
   return Grade.Good;
 }
 
-export function Writing({ word, onAnswer, onSkip }: Props) {
-  const { writingOutline } = useSettings();
-  const chars = writableChars(word.hanzi);
+export function Writing({ word, onAnswer, onSkip, chars: onlyChars, outline = false, label, autoAdvance = false }: Props) {
+  const chars = onlyChars ?? writableChars(word.hanzi);
   const hostRef = useRef<HTMLDivElement>(null);
   const writerRef = useRef<HanziWriter | null>(null);
   const [index, setIndex] = useState(0);
@@ -38,7 +52,7 @@ export function Writing({ word, onAnswer, onSkip }: Props) {
 
   const finish = () => {
     setStatus('done');
-    autoSpeak(word.hanzi);
+    if (!autoAdvance) autoSpeak(word.hanzi);
   };
 
   const startQuiz = (writer: HanziWriter) => {
@@ -74,7 +88,7 @@ export function Writing({ word, onAnswer, onSkip }: Props) {
       height: size,
       padding: BOARD_PADDING,
       showCharacter: false,
-      showOutline: writingOutline,
+      showOutline: outline,
       strokeColor: cssVar('--text'),
       outlineColor: cssVar('--border'),
       drawingColor: cssVar('--muted'),
@@ -118,7 +132,15 @@ export function Writing({ word, onAnswer, onSkip }: Props) {
     finish();
   };
 
-  const next = () => onAnswer(gradeFor(mistakes, chars.length, helped, gaveUp));
+  const next = () => onAnswer(gradeFor(mistakes, chars.length, helped, gaveUp), { mistakes, gaveUp });
+
+  // Tracing: move on as soon as the character is complete.
+  useEffect(() => {
+    if (autoAdvance && status === 'done') {
+      const t = setTimeout(next, 500);
+      return () => clearTimeout(t);
+    }
+  }, [status]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -135,7 +157,7 @@ export function Writing({ word, onAnswer, onSkip }: Props) {
 
   return (
     <div className="practice writing-practice">
-      <WritingPrompt word={word} />
+      <WritingPrompt word={word} label={label} />
       <WritingStyleToggle />
       <CharSlots chars={chars} index={index} done={status === 'done'} />
 

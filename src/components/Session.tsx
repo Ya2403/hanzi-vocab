@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../store';
-import { cardsFor, orderSteps, practiceCard, retryOf, reviewCards, testedSkills, type SessionMode, type Step } from '../lib/planner';
+import { cardsFor, DELAYED_RECALL, orderSteps, practiceCard, retryOf, reviewCards, testedSkills, type SessionMode, type Step } from '../lib/planner';
 import { activeSkills, Grade, isLearned, practiceMiss, recordAnswer, reviewWithLeech, SKILL_LABEL, skillState } from '../lib/srs';
 import { shuffle } from '../lib/words';
 import type { Direction, Skill, Skills, Word } from '../lib/types';
 import { Flashcard } from './Flashcard';
 import { MultipleChoice } from './MultipleChoice';
-import { Writing } from './Writing';
-import { FreeDraw } from './FreeDraw';
+import { WritingFlow } from './WritingFlow';
 import { updateSettings, usePinyinVisibility, useSettings } from '../lib/settings';
 import { LeechPrompt } from './LeechPrompt';
 import { Typing } from './Typing';
@@ -136,6 +135,19 @@ export function Session({ title, words: initialWords, mode, direction, updateSch
   const answer = (grades: Grades, toneError = false) => {
     if (!current || !word) return;
     gradeCard(word, current, grades, toneError);
+    const c = current.card;
+    if (c.kind === 'single' && c.ex === 'writing') {
+      // Writing doesn't repeat right away: it comes back once, blank, 3–5 cards later
+      // (if the session still has that many cards).
+      setQueue(([head, ...rest]) => {
+        if (head.delayed || rest.length < DELAYED_RECALL.min) return rest;
+        const at = Math.min(rest.length, DELAYED_RECALL.min + Math.floor(Math.random() * (DELAYED_RECALL.max - DELAYED_RECALL.min + 1)));
+        return [...rest.slice(0, at), { ...head, delayed: true, scheduled: [] }, ...rest.slice(at)];
+      });
+      if (!current.delayed && queue.length - 1 >= DELAYED_RECALL.min) setTotal((t) => t + 1);
+      setStep((s) => s + 1);
+      return;
+    }
     const missed = Object.values(grades).some((q) => q! < 3);
     if (missed) setRetried((r) => new Set(r).add(stepKey(retryOf(current))));
     setQueue(([head, ...rest]) => (missed ? [...rest, retryOf(head)] : rest));
@@ -254,12 +266,9 @@ export function Session({ title, words: initialWords, mode, direction, updateSch
 
   const choicePool = learnedPool.length >= 4 ? learnedPool : allWords;
   const c = current.card;
-  const writingCard = (onAnswer: (q: number) => void) =>
-    writingStyle === 'free' ? (
-      <FreeDraw key={`${writingStyle}-${step}`} word={word} onAnswer={onAnswer} onSkip={skip} />
-    ) : (
-      <Writing key={`${writingStyle}-${step}`} word={word} onAnswer={onAnswer} onSkip={skip} />
-    );
+  const writingCard = (onAnswer: (q: number) => void) => (
+    <WritingFlow key={`${writingStyle}-${step}`} word={word} onAnswer={onAnswer} onSkip={skip} blankOnly={current.delayed} />
+  );
 
   let card;
   if (matchRound) {
@@ -311,6 +320,7 @@ export function Session({ title, words: initialWords, mode, direction, updateSch
       {leechPrompt}
       <div className="session-title muted small">
         {title} · {label}
+        {current.delayed && ' · recall'}
         {retried.has(stepKey(current)) && ' · retry'}
       </div>
       {card}

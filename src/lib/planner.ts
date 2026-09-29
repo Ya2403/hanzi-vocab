@@ -125,7 +125,12 @@ export interface Step {
   card: Card;
   /** Skills whose schedule this card may change (Review: the due ones). Others only record accuracy. */
   scheduled: Skill[];
+  /** Writing: the delayed recall a few cards later (blank grid only, not graded for the schedule). */
+  delayed?: boolean;
 }
+
+/** The delayed recall of a writing card comes back this many cards later (at random within the range). */
+export const DELAYED_RECALL = { min: 3, max: 5 };
 
 /** The skills a card tests. */
 export function testedSkills(card: Card): Skill[] {

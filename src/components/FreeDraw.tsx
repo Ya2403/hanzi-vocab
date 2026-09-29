@@ -3,16 +3,22 @@ import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as Reac
 import HanziWriter, { type CharacterJson } from 'hanzi-writer';
 import { boardToUnit, compareStrokes, refToUnit, type FreeDrawResult, type Pt, type Stroke, type Verdict } from '../lib/freeDraw';
 import { Grade } from '../lib/srs';
-import { useSettings } from '../lib/settings';
 import { charDataLoader, loadStrokeData, writableChars } from '../lib/strokes';
 import type { Word } from '../lib/types';
+import type { WritingAttempt } from './Writing';
 import { BOARD_PADDING, CharSlots, cssVar, MAX_BOARD_SIZE, RiceGrid, WritingPrompt, WritingStyleToggle } from './writingParts';
 
 interface Props {
   word: Word;
-  onAnswer(quality: number): void;
+  onAnswer(quality: number, attempt?: WritingAttempt): void;
   /** Leave the card ungraded (e.g. stroke data unavailable offline). */
   onSkip(): void;
+  /** Only these characters (the writing flow goes one character at a time). Default: the whole word. */
+  chars?: string[];
+  /** Show the faint outline to trace over. */
+  outline?: boolean;
+  /** Prompt heading, e.g. "Trace it" or "Write from memory". */
+  label?: string;
 }
 
 type Status = 'loading' | 'drawing' | 'checked' | 'animating' | 'error';
@@ -36,9 +42,8 @@ const verdictOf = (r: CharResult): Verdict => (r.overridden ? 'correct' : r.resu
 const toPath = (s: Stroke) =>
   s.length === 1 ? `M${s[0][0]} ${s[0][1]}L${s[0][0]} ${s[0][1]}` : `M${s.map((p) => `${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join('L')}`;
 
-export function FreeDraw({ word, onAnswer, onSkip }: Props) {
-  const { writingOutline } = useSettings();
-  const chars = writableChars(word.hanzi);
+export function FreeDraw({ word, onAnswer, onSkip, chars: onlyChars, outline = false, label }: Props) {
+  const chars = onlyChars ?? writableChars(word.hanzi);
   const boardRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState(MAX_BOARD_SIZE);
   const [index, setIndex] = useState(0);
@@ -162,7 +167,7 @@ export function FreeDraw({ word, onAnswer, onSkip }: Props) {
     }
     // Word verdict = the weakest character's verdict.
     const worst = rs.map(verdictOf).reduce<Verdict>((w, v) => (RANK[v] < RANK[w] ? v : w), 'correct');
-    onAnswer(GRADE[worst]);
+    onAnswer(GRADE[worst], { verdict: worst, gaveUp: rs.some((r) => r.gaveUp) });
   };
 
   useEffect(() => {
@@ -200,7 +205,7 @@ export function FreeDraw({ word, onAnswer, onSkip }: Props) {
 
   return (
     <div className="practice writing-practice">
-      <WritingPrompt word={word} />
+      <WritingPrompt word={word} label={label} />
       <WritingStyleToggle />
       <CharSlots chars={chars} index={index} done={status === 'checked' && isLast} />
 
@@ -216,7 +221,7 @@ export function FreeDraw({ word, onAnswer, onSkip }: Props) {
           aria-label="Drawing area"
           role="img"
         >
-          {data && status === 'drawing' && writingOutline && (
+          {data && status === 'drawing' && outline && (
             <g transform={refTransform} className="ref-outline">
               {data.strokes.map((d, i) => (
                 <path key={i} d={d} />
@@ -326,7 +331,7 @@ export function FreeDraw({ word, onAnswer, onSkip }: Props) {
 }
 
 /** Plays Hanzi Writer's stroke-order animation over the board; tap to close early. */
-function StrokeOrderAnimation({ char, size, onDone }: { char: string; size: number; onDone(): void }) {
+export function StrokeOrderAnimation({ char, size, onDone }: { char: string; size: number; onDone(): void }) {
   const hostRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const host = hostRef.current;

@@ -12,6 +12,7 @@ import { hanziDictCached, loadHanziDict } from '../lib/hanziDict';
 import { Segmented } from '../components/Segmented';
 import { BulkAdd } from '../components/BulkAdd';
 import { SyncCard } from '../components/SyncCard';
+import { TraceOptions } from '../components/TraceOptions';
 import { SkillStats } from '../components/SkillStats';
 import { Session } from '../components/Session';
 import type { Word } from '../lib/types';
@@ -354,6 +355,7 @@ function SettingsCard({ leechCount }: { leechCount: number }) {
         When on, a word also gets a writing skill (draw it from memory) once its recall interval reaches 6 days. Writing
         reviews then have their own schedule.
       </p>
+      {writingPractice && <TraceOptions />}
 
       <label className="field">
         <span className="field-label">Leech threshold</span>

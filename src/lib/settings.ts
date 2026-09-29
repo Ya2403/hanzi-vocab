@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import type { CardDirection, Direction, PracticeMode } from './types';
 
+export type TraceMode = 'always' | 'weak' | 'never';
 export type Tones = 'ignore' | 'show' | 'required';
 
 /** Per-device UI preferences (not vocabulary data), kept in localStorage. */
@@ -11,8 +12,10 @@ export interface Settings {
   reviewDirection: Direction;
   practiceMode: PracticeMode;
   practiceDirection: Direction;
-  /** Writing mode: show a faint outline to trace instead of writing from memory. */
-  writingOutline: boolean;
+  /** Writing: trace over the outline before writing from memory (always, only for new or weak words, never). */
+  traceMode: TraceMode;
+  /** Writing: play the stroke-order animation before tracing. */
+  strokeOrderFirst: boolean;
   /** Writing mode: Hanzi Writer's stroke-by-stroke quiz, or draw the whole character then check. */
   writingStyle: 'strokes' | 'free';
   /** Choice mode: one word with four answers, or match several pairs at once. */
@@ -53,7 +56,8 @@ const defaults: Settings = {
   reviewDirection: 'zh-en',
   practiceMode: 'choice',
   practiceDirection: 'mixed',
-  writingOutline: false,
+  traceMode: 'weak',
+  strokeOrderFirst: true,
   breakdownOpen: false,
   writingStyle: 'strokes',
   choiceStyle: 'single',
