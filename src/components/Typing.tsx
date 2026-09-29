@@ -34,6 +34,10 @@ export function Typing({ word, direction, onAnswer }: Props) {
       setHint('Type the pinyin, e.g. ni3 hao3 or nǐ hǎo.');
       return;
     }
+    if (toChinese && !/[㐀-鿿]/.test(answer)) {
+      setHint('Type the characters (汉字) — switch to a Chinese keyboard, e.g. Chinese pinyin input.');
+      return;
+    }
     const r = toChinese ? checkChinese(answer, word, tones) : toPinyinDir ? checkPinyin(answer, word.pinyin, tones) : checkMeaning(answer, word.meaning);
     setResult(r);
     autoSpeak(word.hanzi);
@@ -59,7 +63,7 @@ export function Typing({ word, direction, onAnswer }: Props) {
     <div className="practice">
       <div className="card prompt-card">
         <div className="card-kicker">
-          {toChinese ? 'Type it in Chinese (hanzi or pinyin)' : toPinyinDir ? 'Type the pinyin' : 'Type the meaning'}
+          {toChinese ? 'Type the Chinese characters' : toPinyinDir ? 'Type the pinyin' : 'Type the meaning'}
         </div>
         {toChinese ? (
           <div className="prompt-meaning">{word.meaning}</div>
@@ -92,7 +96,7 @@ export function Typing({ word, direction, onAnswer }: Props) {
             setHint(null);
           }}
           readOnly={result !== null}
-          placeholder={toChinese ? (tones === 'ignore' ? '汉字 / ni hao' : '汉字 / ni3 hao3 / nǐ hǎo') : toPinyinDir ? (tones === 'ignore' ? 'ni hao' : 'ni3 hao3 / nǐ hǎo') : 'meaning'}
+          placeholder={toChinese ? '汉字' : toPinyinDir ? (tones === 'ignore' ? 'ni hao' : 'ni3 hao3 / nǐ hǎo') : 'meaning'}
           lang={toChinese ? 'zh-CN' : 'en'}
           autoFocus
           autoComplete="off"

@@ -1,6 +1,6 @@
 import { autoSpeak } from '../lib/quiet';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { checkMeaning, checkPinyin, type Check } from '../lib/answer';
+import { checkPinyin, type Check } from '../lib/answer';
 import { normalizeSearch } from '../lib/pinyin';
 import { pinyinDistractors, stripTones } from '../lib/pinyinOptions';
 import { useSettings } from '../lib/settings';
@@ -24,7 +24,6 @@ interface Props {
   word: Word;
   /** Pool for the meaning distractors and similar-sounding pinyin. */
   pool: Word[];
-  meaningEx: StepExercise;
   pinyinEx: StepExercise;
   onDone(result: TwoStepResult): void;
 }
@@ -73,11 +72,11 @@ const quality = (ex: StepExercise, options: Option[], s: StepState): number =>
 
 /**
  * Meaning, then pinyin, for the same characters:
- * 1. the hanzi alone (no pinyin, no audio) → what does it mean?
+ * 1. the hanzi alone (no pinyin, no audio) → what does it mean? (multiple choice)
  * 2. same hanzi → how is it pronounced?
  * 3. the full answer (hanzi, toned pinyin, meaning, example) with audio → Continue.
  */
-export function TwoStepCard({ word, pool, meaningEx, pinyinEx, onDone }: Props) {
+export function TwoStepCard({ word, pool, pinyinEx, onDone }: Props) {
   const { tones } = useSettings();
   const [mOptions] = useState(() => meaningOptions(word, pool));
   const [pOptions] = useState(() => pinyinOptions(word, pool, tones === 'ignore'));
@@ -88,7 +87,7 @@ export function TwoStepCard({ word, pool, meaningEx, pinyinEx, onDone }: Props) 
 
   const mAnswered = m.picked !== undefined || !!m.check;
   const pAnswered = p.picked !== undefined || !!p.check;
-  const mq = mAnswered ? quality(meaningEx, mOptions, m) : null;
+  const mq = mAnswered ? quality('choice', mOptions, m) : null;
   const pq = pAnswered ? quality(pinyinEx, pOptions, p) : null;
 
   const toPinyin = () => {
@@ -105,7 +104,7 @@ export function TwoStepCard({ word, pool, meaningEx, pinyinEx, onDone }: Props) 
 
   // A right multiple-choice meaning moves on by itself; a wrong one waits so the answer can be read.
   useEffect(() => {
-    if (stage === 'meaning' && meaningEx === 'choice' && mq !== null && mq >= 3) {
+    if (stage === 'meaning' && mq !== null && mq >= 3) {
       const t = setTimeout(toPinyin, 700);
       return () => clearTimeout(t);
     }
@@ -115,7 +114,7 @@ export function TwoStepCard({ word, pool, meaningEx, pinyinEx, onDone }: Props) 
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.repeat || document.querySelector('.modal-backdrop')) return;
       const n = Number(e.key) - 1;
-      if (stage === 'meaning' && meaningEx === 'choice' && !mAnswered && mOptions[n]) setM({ picked: n });
+      if (stage === 'meaning' && !mAnswered && mOptions[n]) setM({ picked: n });
       else if (stage === 'pinyin' && pinyinEx === 'choice' && !pAnswered && pOptions[n]) {
         setP({ picked: n });
         reveal();
@@ -179,33 +178,21 @@ export function TwoStepCard({ word, pool, meaningEx, pinyinEx, onDone }: Props) 
         )}
       </div>
 
-      {stage === 'meaning' &&
-        (meaningEx === 'choice' ? (
-          <>
-            {choiceList(mOptions, m, (i) => setM({ picked: i }))}
-            {mAnswered && mq! < 3 && (
-              <div className="feedback bad">
-                <span>
-                  It means <b>{word.meaning}</b>
-                </span>
-                <button className="btn primary" onClick={toPinyin} autoFocus>
-                  Next: pinyin
-                </button>
-              </div>
-            )}
-          </>
-        ) : (
-          <TypedStep
-            key="m"
-            placeholder="meaning"
-            state={m}
-            check={(t) => checkMeaning(t, word.meaning)}
-            answerText={word.meaning}
-            onChange={setM}
-            onNext={toPinyin}
-            nextLabel="Next: pinyin"
-          />
-        ))}
+      {stage === 'meaning' && (
+        <>
+          {choiceList(mOptions, m, (i) => setM({ picked: i }))}
+          {mAnswered && mq! < 3 && (
+            <div className="feedback bad">
+              <span>
+                It means <b>{word.meaning}</b>
+              </span>
+              <button className="btn primary" onClick={toPinyin} autoFocus>
+                Next: pinyin
+              </button>
+            </div>
+          )}
+        </>
+      )}
 
       {stage === 'pinyin' &&
         (pinyinEx === 'choice' ? (

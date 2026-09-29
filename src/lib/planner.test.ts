@@ -110,13 +110,20 @@ describe('cards for due skills', () => {
   it('asks meaning and pinyin on one two-step card, scheduling only the due ones', () => {
     const word = w('好', { reps: 1, interval: 1 }, { pinyin: { due: ON } });
     const [step] = cardsFor(word, ['pinyin'], opts);
-    expect(step.card).toEqual({ kind: 'pair', m: 'choice', p: 'choice' });
+    expect(step.card).toEqual({ kind: 'pair', p: 'choice' });
     expect(step.scheduled).toEqual(['pinyin']);
   });
 
-  it('types the parts the word is strong at', () => {
+  it('never asks to type the meaning; types pinyin once strong, characters once recall is medium', () => {
     const word = w('好', { reps: 4, interval: 20 }, { pinyin: { reps: 1, interval: 1 } });
-    expect(cardsFor(word, ['meaning', 'pinyin'], opts)[0].card).toEqual({ kind: 'pair', m: 'typing', p: 'choice' });
+    expect(cardsFor(word, ['meaning', 'pinyin'], opts)[0].card).toEqual({ kind: 'pair', p: 'choice' });
+    const strongPinyin = w('好', { reps: 4, interval: 20 });
+    expect(cardsFor(strongPinyin, ['meaning'], opts)[0].card).toEqual({ kind: 'pair', p: 'typing' });
+    expect(chooseExercise(strongPinyin, 'meaning', opts)).toEqual({ ex: 'choice', dir: 'zh-en' });
+    expect(cardsFor(strongPinyin, ['meaning', 'pinyin'], { ...opts, mode: 'typing' })[0].card).toEqual({ kind: 'pair', p: 'typing' });
+    const mediumRecall = w('中', { reps: 2, interval: 6 });
+    expect(chooseExercise(mediumRecall, 'recall', opts)).toEqual({ ex: 'typing', dir: 'en-zh' });
+    expect(chooseExercise(w('学', { reps: 1, interval: 1 }), 'recall', opts).ex).toBe('choice');
   });
 
   it('gives recall and writing their own cards', () => {
@@ -146,7 +153,7 @@ describe('cards for due skills', () => {
   it('makes a missed card easier when it comes back', () => {
     const word = w('好', { reps: 4, interval: 20 });
     const [pair] = cardsFor(word, ['meaning'], opts);
-    expect(retryOf(pair).card).toEqual({ kind: 'pair', m: 'choice', p: 'choice' });
+    expect(retryOf(pair).card).toEqual({ kind: 'pair', p: 'choice' });
     const [recall] = cardsFor(word, ['recall'], opts);
     expect(retryOf(recall).card).toMatchObject({ ex: 'choice' });
   });

@@ -280,7 +280,6 @@ export function Session({ title, words: initialWords, mode, direction, updateSch
         key={step}
         word={word}
         pool={choicePool}
-        meaningEx={c.m}
         pinyinEx={c.p}
         onDone={(r) => answer({ meaning: r.meaning, pinyin: r.pinyin }, r.toneError)}
       />

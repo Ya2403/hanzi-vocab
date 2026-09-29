@@ -93,7 +93,7 @@ export function SessionOptions({
           )}
           {mode === 'typing' && (
             <p className="hint">
-              中 → EN: type the meaning. EN → 中: type hanzi or pinyin. 中 → 拼音: type the pinyin. Pinyin can use tone marks or numbers (ni3 hao3); toneless counts as “close”.
+              EN → 中: type the Chinese characters (use a Chinese keyboard). 中 → EN and 中 → 拼音: pick the meaning, then type the pinyin (tone marks or numbers like ni3 hao3; how tones count follows the Tones setting).
             </p>
           )}
           <Segmented

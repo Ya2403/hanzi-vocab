@@ -53,9 +53,9 @@ export function strength(w: Word, on: string = today()): Strength {
 
 /**
  * The exercise for a card testing `skill`, by that skill's strength:
- * - meaning: multiple choice 中→EN, typing the meaning once strong;
+ * - meaning: always multiple choice 中→EN;
  * - pinyin: multiple choice 中→拼音, then listening, typing pinyin once strong;
- * - recall: multiple choice EN→中, typing hanzi once strong;
+ * - recall: multiple choice EN→中 while weak, then typing the characters;
  * - writing: always writing.
  * Radical-only entries (氵…) have no reading of their own: always multiple choice.
  */
@@ -64,7 +64,11 @@ export function chooseExercise(w: Word, skill: Skill, opts: { listening: boolean
   const dir = SKILL_DIR[skill];
   if (skill === 'writing') return { ex: 'writing', dir };
   if (isRadicalOnly(w)) return { ex: 'choice', dir };
+  // Meaning is always recognised from options (typing English translations isn't useful practice).
+  if (skill === 'meaning') return { ex: 'choice', dir };
   const st = skillStrength(skillState(w, skill, opts.on), w.learnedOn, opts.on);
+  // Recall: type the characters once it isn't weak any more. Pinyin: type it once strong.
+  if (skill === 'recall' && st !== 'weak') return { ex: 'typing', dir };
   if (st === 'strong' || st === 'veryStrong') return { ex: 'typing', dir };
   if (skill === 'pinyin' && st === 'medium' && opts.listening && rnd() < 0.5) return { ex: 'listen', dir };
   return { ex: 'choice', dir };
@@ -115,7 +119,7 @@ export type Part = 'choice' | 'typing';
  * - cloze: a sentence with the word blanked out (meaning + recall).
  */
 export type Card =
-  | { kind: 'pair'; m: Part; p: Part }
+  | { kind: 'pair'; p: Part }
   | { kind: 'single'; skill: Skill; ex: Exercise; dir: CardDirection }
   | { kind: 'flash'; dir: CardDirection; skills: Skill[] }
   | { kind: 'cloze' };
@@ -180,15 +184,15 @@ export function cardsFor(w: Word, skills: Skill[], opts: PlanOpts): Step[] {
 
   if (mode === 'sentence' && (has('meaning') || has('recall')) && !radical) {
     add({ kind: 'cloze' }, skills.filter((k) => k === 'meaning' || k === 'recall'));
-    if (has('pinyin')) add({ kind: 'pair', m: 'choice', p: 'choice' }, ['pinyin']);
+    if (has('pinyin')) add({ kind: 'pair', p: 'choice' }, ['pinyin']);
   } else if (mp.length) {
-    if (radical) add(mode === 'flashcards' ? { kind: 'flash', dir: 'zh-en', skills: ['meaning'] } : single('meaning', mode === 'typing' ? 'typing' : 'choice'), ['meaning']);
+    if (radical) add(mode === 'flashcards' ? { kind: 'flash', dir: 'zh-en', skills: ['meaning'] } : single('meaning', 'choice'), ['meaning']);
     else if (mode === 'flashcards') add({ kind: 'flash', dir: 'zh-en', skills: ['meaning', 'pinyin'] }, mp);
     else if (mode === 'choice' && opts.choiceStyle === 'match' && mp.length === 1) add(single(mp[0], 'choice'), mp);
-    else if (mode === 'typing') add({ kind: 'pair', m: 'typing', p: 'typing' }, mp);
+    else if (mode === 'typing') add({ kind: 'pair', p: 'typing' }, mp);
     else if (mode === 'auto' && mp.length === 1 && mp[0] === 'pinyin' && chooseExercise(w, 'pinyin', opts).ex === 'listen') add(single('pinyin', 'listen'), mp);
-    else if (mode === 'auto') add({ kind: 'pair', m: partFor(w, 'meaning', on), p: partFor(w, 'pinyin', on) }, mp);
-    else add({ kind: 'pair', m: 'choice', p: 'choice' }, mp);
+    else if (mode === 'auto') add({ kind: 'pair', p: partFor(w, 'pinyin', on) }, mp);
+    else add({ kind: 'pair', p: 'choice' }, mp);
   }
   if (has('recall') && !(mode === 'sentence' && !radical)) {
     if (mode === 'flashcards') add({ kind: 'flash', dir: 'en-zh', skills: ['recall'] }, ['recall']);
@@ -230,7 +234,7 @@ export function practiceCard(w: Word, direction: Direction, opts: PlanOpts): Ste
 /** The easier card a missed one becomes when it comes back later in the same session. */
 export function retryOf(step: Step): Step {
   const { card } = step;
-  if (card.kind === 'pair') return { ...step, card: { kind: 'pair', m: 'choice', p: 'choice' } };
+  if (card.kind === 'pair') return { ...step, card: { kind: 'pair', p: 'choice' } };
   if (card.kind === 'single' && (card.ex === 'typing' || card.ex === 'listen')) return { ...step, card: { ...card, ex: 'choice' } };
   return step;
 }
