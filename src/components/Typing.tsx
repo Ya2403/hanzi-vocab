@@ -1,8 +1,8 @@
+import { autoSpeak } from '../lib/quiet';
 import { useRef, useState, type FormEvent } from 'react';
 import { checkChinese, checkMeaning, checkPinyin, type Check } from '../lib/answer';
 import { Grade } from '../lib/srs';
-import { getSettings, usePinyinVisibility, useSettings } from '../lib/settings';
-import { speak } from '../lib/speech';
+import { usePinyinVisibility, useSettings } from '../lib/settings';
 import type { CardDirection, Word } from '../lib/types';
 import { SpeakButton } from './SpeakButton';
 
@@ -36,7 +36,7 @@ export function Typing({ word, direction, onAnswer }: Props) {
     }
     const r = toChinese ? checkChinese(answer, word, tones) : toPinyinDir ? checkPinyin(answer, word.pinyin, tones) : checkMeaning(answer, word.meaning);
     setResult(r);
-    if (getSettings().autoPlay) speak(word.hanzi);
+    autoSpeak(word.hanzi);
     // Keep focus in the field so Enter / the keyboard's Go button continues.
     inputRef.current?.focus();
   };
@@ -52,7 +52,7 @@ export function Typing({ word, direction, onAnswer }: Props) {
 
   const giveUp = () => {
     setResult({ verdict: 'wrong' });
-    if (getSettings().autoPlay) speak(word.hanzi);
+    autoSpeak(word.hanzi);
   };
 
   return (

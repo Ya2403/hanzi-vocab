@@ -1,9 +1,9 @@
+import { autoSpeak } from '../lib/quiet';
 import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import HanziWriter, { type CharacterJson } from 'hanzi-writer';
 import { boardToUnit, compareStrokes, refToUnit, type FreeDrawResult, type Pt, type Stroke, type Verdict } from '../lib/freeDraw';
 import { Grade } from '../lib/srs';
-import { getSettings, useSettings } from '../lib/settings';
-import { speak } from '../lib/speech';
+import { useSettings } from '../lib/settings';
 import { charDataLoader, loadStrokeData, writableChars } from '../lib/strokes';
 import type { Word } from '../lib/types';
 import { BOARD_PADDING, CharSlots, cssVar, MAX_BOARD_SIZE, RiceGrid, WritingPrompt, WritingStyleToggle } from './writingParts';
@@ -137,7 +137,7 @@ export function FreeDraw({ word, onAnswer, onSkip }: Props) {
       return next;
     });
     setStatus('checked');
-    if (isLast && getSettings().autoPlay) speak(word.hanzi);
+    if (isLast) autoSpeak(word.hanzi);
   };
 
   const check = () => {

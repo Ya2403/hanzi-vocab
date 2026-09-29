@@ -1,7 +1,7 @@
+import { autoSpeak } from '../lib/quiet';
 import { useEffect, useRef, useState } from 'react';
 import { describe, useHanziDict } from '../lib/hanziDict';
 import { isRadicalOnly } from '../lib/learn';
-import { getSettings } from '../lib/settings';
 import { speak, speechSupported } from '../lib/speech';
 import { Grade } from '../lib/srs';
 import { writableChars } from '../lib/strokes';
@@ -17,7 +17,7 @@ function useAutoPlay(text: string) {
   useEffect(() => {
     if (played.current) return;
     played.current = true;
-    if (getSettings().autoPlay) speak(text);
+    autoSpeak(text);
   }, [text]);
 }
 
@@ -101,7 +101,18 @@ export function TeachCard({ word, onDone }: { word: Word; onDone(): void }) {
 }
 
 /** Listening round: hear the word, pick its characters. */
-export function ListenChoice({ word, pool, onAnswer }: { word: Word; pool: Word[]; onAnswer(q: number): void }) {
+export function ListenChoice({
+  word,
+  pool,
+  onAnswer,
+  onCantListen,
+}: {
+  word: Word;
+  pool: Word[];
+  onAnswer(q: number): void;
+  /** "Can't listen now": skip this card ungraded and pause audio exercises. */
+  onCantListen?(): void;
+}) {
   const [options] = useState(() =>
     shuffle([word, ...shuffle(pool.filter((w) => w.id !== word.id && w.hanzi !== word.hanzi)).slice(0, 3)]),
   );
@@ -149,6 +160,11 @@ export function ListenChoice({ word, pool, onAnswer }: { word: Word; pool: Word[
           );
         })}
       </div>
+      {!picked && onCantListen && (
+        <button className="btn ghost cant-listen" onClick={onCantListen}>
+          <Icon name="headphonesOff" size={18} /> Can’t listen now
+        </button>
+      )}
       {picked && (
         <div className={`feedback ${correct ? 'ok' : 'bad'}`}>
           <span>{correct ? 'Correct!' : 'Not quite: it comes back later in this round.'}</span>

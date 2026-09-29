@@ -1,7 +1,7 @@
+import { autoSpeak } from '../lib/quiet';
 import { useEffect, useMemo, useState } from 'react';
 import { Grade } from '../lib/srs';
-import { getSettings, usePinyinVisibility } from '../lib/settings';
-import { speak } from '../lib/speech';
+import { usePinyinVisibility } from '../lib/settings';
 import { shuffle } from '../lib/words';
 import type { CardDirection, Word } from '../lib/types';
 
@@ -45,7 +45,7 @@ export function MatchPairs({ words, direction, onDone }: Props) {
     if (answerOf(l, direction) === answerOf(r, direction)) {
       setDoneLeft((s) => new Set(s).add(leftId));
       setDoneRight((s) => new Set(s).add(rightId));
-      if (getSettings().autoPlay) speak(l.hanzi);
+      autoSpeak(l.hanzi);
     } else {
       setMistakes((m) => new Map(m).set(leftId, (m.get(leftId) ?? 0) + 1));
       setWrong({ left: leftId, right: rightId });

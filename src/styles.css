@@ -2588,3 +2588,24 @@ body.in-session .content {
   flex-wrap: wrap;
   gap: 6px 14px;
 }
+
+/* ---------- Can't listen now ---------- */
+.cant-listen {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+.quiet-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  background: var(--warn-soft);
+  color: var(--warn);
+  cursor: pointer;
+}
+.session-bar .quiet-badge {
+  padding: 4px 8px;
+}

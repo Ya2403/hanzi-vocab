@@ -1,9 +1,9 @@
+import { autoSpeak } from '../lib/quiet';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useStore } from '../store';
 import { checkChinese, type Check } from '../lib/answer';
 import { toPinyin } from '../lib/pinyin';
 import { getSettings, usePinyinVisibility, useSettings } from '../lib/settings';
-import { speak } from '../lib/speech';
 import { Grade } from '../lib/srs';
 import { findSentences, matchLabel, pickRotating, useCorpus } from '../lib/tatoeba';
 import type { Word } from '../lib/types';
@@ -71,7 +71,7 @@ export function SentenceCloze({ word, onAnswer, onSkip }: Props) {
 
   const check = () => {
     setResult(checkChinese(input, word, getSettings().tones));
-    if (getSettings().autoPlay && choice) speak(choice.zh);
+    if (choice) autoSpeak(choice.zh);
     inputRef.current?.focus();
   };
   const submit = (e: FormEvent) => {

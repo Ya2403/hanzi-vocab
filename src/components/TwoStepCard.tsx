@@ -1,9 +1,9 @@
+import { autoSpeak } from '../lib/quiet';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { checkMeaning, checkPinyin, type Check } from '../lib/answer';
 import { normalizeSearch } from '../lib/pinyin';
 import { pinyinDistractors, stripTones } from '../lib/pinyinOptions';
-import { getSettings, useSettings } from '../lib/settings';
-import { speak } from '../lib/speech';
+import { useSettings } from '../lib/settings';
 import { Grade } from '../lib/srs';
 import { shuffle } from '../lib/words';
 import type { Word } from '../lib/types';
@@ -98,7 +98,7 @@ export function TwoStepCard({ word, pool, meaningEx, pinyinEx, onDone }: Props) 
   };
   const reveal = () => {
     setStage('done');
-    if (getSettings().autoPlay) speak(word.hanzi);
+    autoSpeak(word.hanzi);
   };
   const finish = () =>
     onDone({ meaning: mq ?? Grade.Again, pinyin: pq ?? Grade.Again, toneError: !!p.check?.toneError && !p.override && tones !== 'ignore' });

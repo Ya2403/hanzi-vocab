@@ -1,7 +1,7 @@
+import { autoSpeak } from '../lib/quiet';
 import { useEffect, useState, type MouseEvent } from 'react';
 import { Grade, SKILL_LABEL } from '../lib/srs';
-import { getSettings, usePinyinVisibility, useSettings } from '../lib/settings';
-import { speak } from '../lib/speech';
+import { usePinyinVisibility, useSettings } from '../lib/settings';
 import type { CardDirection, Skill, Word } from '../lib/types';
 import { SpeakButton } from './SpeakButton';
 import { Breakdown } from './Breakdown';
@@ -52,7 +52,7 @@ export function Flashcard({ word, direction, skills, onAnswer }: Props) {
   const flip = () => {
     if (flipped) return;
     setFlipped(true);
-    if (getSettings().autoPlay) speak(word.hanzi);
+    autoSpeak(word.hanzi);
   };
 
   useEffect(() => {

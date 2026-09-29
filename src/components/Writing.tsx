@@ -1,8 +1,8 @@
+import { autoSpeak } from '../lib/quiet';
 import { useEffect, useRef, useState } from 'react';
 import HanziWriter from 'hanzi-writer';
 import { Grade } from '../lib/srs';
-import { getSettings, useSettings } from '../lib/settings';
-import { speak } from '../lib/speech';
+import { useSettings } from '../lib/settings';
 import { charDataLoader, writableChars } from '../lib/strokes';
 import type { Word } from '../lib/types';
 import { BOARD_PADDING, CharSlots, cssVar, MAX_BOARD_SIZE, RiceGrid, WritingPrompt, WritingStyleToggle } from './writingParts';
@@ -38,7 +38,7 @@ export function Writing({ word, onAnswer, onSkip }: Props) {
 
   const finish = () => {
     setStatus('done');
-    if (getSettings().autoPlay) speak(word.hanzi);
+    autoSpeak(word.hanzi);
   };
 
   const startQuiz = (writer: HanziWriter) => {

@@ -8,6 +8,8 @@ import { learnedSkills, newSrs, recordAnswer, type SkillStats } from '../lib/srs
 import { shuffle } from '../lib/words';
 import type { Skill, Word } from '../lib/types';
 import { Icon } from './Icon';
+import { QuietBadge } from './QuietBadge';
+import { endQuietSession, isQuiet, startQuiet } from '../lib/quiet';
 import { ListenChoice, listeningAvailable, TeachCard } from './LearnCards';
 import { MultipleChoice } from './MultipleChoice';
 import { Typing } from './Typing';
@@ -59,9 +61,11 @@ export function LearnSession({
 }) {
   const { words, updateWords, recordReview } = useStore();
   const { learnBatchSize, learnDailyLimit, learnTyping } = useSettings();
+  // "Can't listen now" (here or recently): no listening round.
+  const [listenOff, setListenOff] = useState(isQuiet);
   const rounds = useMemo<Round[]>(
-    () => ['meaning', ...(listeningAvailable ? (['listen'] as Round[]) : []), 'produce', ...(learnTyping ? (['typing'] as Round[]) : [])],
-    [learnTyping],
+    () => ['meaning', ...(listeningAvailable && !listenOff ? (['listen'] as Round[]) : []), 'produce', ...(learnTyping ? (['typing'] as Round[]) : [])],
+    [learnTyping, listenOff],
   );
 
   const [dict, setDict] = useState<HanziDict | null>(null);
@@ -79,7 +83,10 @@ export function LearnSession({
   // Full-screen like other sessions.
   useEffect(() => {
     document.body.classList.add('in-session');
-    return () => document.body.classList.remove('in-session');
+    return () => {
+      document.body.classList.remove('in-session');
+      endQuietSession();
+    };
   }, []);
 
   const allowance = Math.max(0, learnDailyLimit - learnedToday(words));
@@ -126,9 +133,10 @@ export function LearnSession({
     stats.current.set(w.id, { ...byWord, [skill]: { answered, correct, recent, lastSeen } });
   };
 
-  const startRound = (r: number) => {
-    for (let k = r; k < rounds.length; k++) {
-      const queue = shuffle(batch.filter((w) => roundApplies(rounds[k], w))).map((w) => w.id);
+  /** Start round `r` (or the next one that has words); `list` is the round list to use. */
+  const startRound = (r: number, list: Round[] = rounds) => {
+    for (let k = r; k < list.length; k++) {
+      const queue = shuffle(batch.filter((w) => roundApplies(list[k], w))).map((w) => w.id);
       if (queue.length) {
         setStage({ kind: 'round', r: k, queue });
         setStep((s) => s + 1);
@@ -166,6 +174,7 @@ export function LearnSession({
         <span className="muted small">
           {learned.length} learned
         </span>
+        <QuietBadge />
       </div>
       <div className="session-title muted small">
         {title} · {label}
@@ -293,7 +302,21 @@ export function LearnSession({
     <div className="session">
       {bar(`Round ${stage.r + 1} of ${rounds.length}: ${ROUND_LABEL[round]} · ${new Set(stage.queue).size} left`, frac)}
       {round === 'meaning' && <MultipleChoice key={step} word={w} allWords={roundPool} direction="zh-en" onAnswer={answer} />}
-      {round === 'listen' && <ListenChoice key={step} word={w} pool={roundPool} onAnswer={answer} />}
+      {round === 'listen' && (
+        <ListenChoice
+          key={step}
+          word={w}
+          pool={roundPool}
+          onAnswer={answer}
+          onCantListen={() => {
+            // Skip the rest of the listening round, ungraded.
+            startQuiet();
+            setListenOff(true);
+            // Without the listening round, the next round takes its place.
+            startRound(stage.r, rounds.filter((x) => x !== 'listen'));
+          }}
+        />
+      )}
       {round === 'produce' && <MultipleChoice key={step} word={w} allWords={roundPool} direction="en-zh" onAnswer={answer} />}
       {round === 'typing' && <Typing key={step} word={w} direction="en-zh" onAnswer={answer} />}
     </div>

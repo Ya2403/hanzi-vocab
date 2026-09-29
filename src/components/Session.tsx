@@ -16,6 +16,8 @@ import { MatchPairs } from './MatchPairs';
 import { ListenChoice, listeningAvailable } from './LearnCards';
 import { TwoStepCard } from './TwoStepCard';
 import { Icon } from './Icon';
+import { QuietBadge } from './QuietBadge';
+import { endQuietSession, isQuiet, startQuiet } from '../lib/quiet';
 
 export type { SessionMode } from '../lib/planner';
 
@@ -57,10 +59,13 @@ export function Session({ title, words: initialWords, mode, direction, updateSch
   // Full-screen practice: the app header is hidden while a session is open (see .in-session in CSS).
   useEffect(() => {
     document.body.classList.add('in-session');
-    return () => document.body.classList.remove('in-session');
+    return () => {
+      document.body.classList.remove('in-session');
+      endQuietSession(); // "Can't listen now" lasts the rest of this session (and at least 15 minutes)
+    };
   }, []);
   const pinyin = usePinyinVisibility();
-  const planOpts = { mode, listening: listeningAvailable, choiceStyle };
+  const planOpts = { mode, listening: listeningAvailable && !isQuiet(), choiceStyle };
 
   const [leech, setLeech] = useState<{ id: string; lapses: number; skill: Skill } | null>(null);
   const [pool, setPool] = useState(initialWords);
@@ -160,6 +165,14 @@ export function Session({ title, words: initialWords, mode, direction, updateSch
     }
     const inRound = new Set(matchSteps);
     setQueue((qu) => [...qu.filter((s) => !inRound.has(s)), ...matchSteps.filter((s) => (q.get(s.id) ?? 0) < 3)]);
+    setStep((s) => s + 1);
+  };
+
+  /** "Can't listen now": skip this card ungraded and swap any other listening cards for multiple choice. */
+  const cantListen = () => {
+    startQuiet();
+    setQueue(([, ...rest]) => rest.map((s) => (s.card.kind === 'single' && s.card.ex === 'listen' ? { ...s, card: { ...s.card, ex: 'choice' } } : s)));
+    setTotal((t) => t - 1);
     setStep((s) => s + 1);
   };
 
@@ -267,7 +280,7 @@ export function Session({ title, words: initialWords, mode, direction, updateSch
   else if (c.kind === 'cloze')
     card = <SentenceCloze key={step} word={word} onAnswer={(q) => answer({ meaning: q, recall: q })} onSkip={skip} />;
   else if (c.ex === 'writing') card = writingCard(answerOne(c.skill));
-  else if (c.ex === 'listen') card = <ListenChoice key={step} word={word} pool={choicePool} onAnswer={answerOne('pinyin')} />;
+  else if (c.ex === 'listen') card = <ListenChoice key={step} word={word} pool={choicePool} onAnswer={answerOne('pinyin')} onCantListen={cantListen} />;
   else if (c.ex === 'typing') card = <Typing key={step} word={word} direction={c.dir} onAnswer={answerOne(c.skill)} />;
   else card = <MultipleChoice key={step} word={word} allWords={choicePool} direction={c.dir} onAnswer={answerOne(c.skill)} />;
 
@@ -293,6 +306,7 @@ export function Session({ title, words: initialWords, mode, direction, updateSch
         >
           拼音
         </button>
+        <QuietBadge />
       </div>
       {leechPrompt}
       <div className="session-title muted small">

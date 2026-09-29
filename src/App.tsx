@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useStore } from './store';
 import { today } from './lib/date';
 import { useSettings } from './lib/settings';
+import { QuietBadge } from './components/QuietBadge';
 import { reviewCount } from './lib/planner';
 import { liveStreak } from './lib/streak';
 import { Icon, type IconName } from './components/Icon';
@@ -63,6 +64,7 @@ export default function App() {
           >
             🔥 {streakDays}
           </span>
+          <QuietBadge />
           <button className={`pill due ${dueCount ? 'has-due' : ''}`} onClick={() => go('review')}>
             {dueCount} due
           </button>

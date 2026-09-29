@@ -1,7 +1,7 @@
+import { autoSpeak } from '../lib/quiet';
 import { useEffect, useState } from 'react';
 import { Grade } from '../lib/srs';
 import { getSettings, usePinyinVisibility } from '../lib/settings';
-import { speak } from '../lib/speech';
 import { normalizeSearch } from '../lib/pinyin';
 import { pinyinDistractors, stripTones } from '../lib/pinyinOptions';
 import { shuffle } from '../lib/words';
@@ -81,7 +81,7 @@ export function MultipleChoice({ word, allWords, direction, onAnswer }: Props) {
   const pick = (key: string) => {
     if (answered) return;
     setPicked(key);
-    if (getSettings().autoPlay) speak(word.hanzi);
+    autoSpeak(word.hanzi);
   };
 
   const next = () => onAnswer(correct ? Grade.Good : Grade.Again);
