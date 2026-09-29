@@ -12,6 +12,9 @@ import { hanziDictCached, loadHanziDict } from '../lib/hanziDict';
 import { Segmented } from '../components/Segmented';
 import { BulkAdd } from '../components/BulkAdd';
 import { SyncCard } from '../components/SyncCard';
+import { SkillStats } from '../components/SkillStats';
+import { Session } from '../components/Session';
+import type { Word } from '../lib/types';
 import { TatoebaBulk } from '../components/Sentences';
 import { corpusCached, loadCorpus } from '../lib/tatoeba';
 
@@ -24,6 +27,7 @@ export function DataScreen() {
   const [voiceOk, setVoiceOk] = useState(hasChineseVoice);
   const [bulk, setBulk] = useState(false);
   const [tatoebaBulk, setTatoebaBulk] = useState(false);
+  const [tonePractice, setTonePractice] = useState<Word[] | null>(null);
   const withoutExample = words.filter((w) => !w.example).length;
 
   useEffect(() => onVoicesChanged(() => setVoiceOk(hasChineseVoice())), []);
@@ -57,13 +61,27 @@ export function DataScreen() {
     }
   };
 
+  if (tonePractice) {
+    return (
+      <Session
+        title="Tones"
+        words={tonePractice}
+        mode={settings.autoExercise ? 'auto' : 'typing'}
+        direction="zh-py"
+        updateSchedule={false}
+        skill="pinyin"
+        onExit={() => setTonePractice(null)}
+      />
+    );
+  }
+
   return (
     <section className="screen data-screen">
       <div className="card">
         <h2>Progress</h2>
         <div className="stat-grid">
           <Stat value={words.length} label="words" />
-          <Stat value={learned} label="studied" />
+          <Stat value={learned} label="learned" />
           <Stat value={mature} label="mature (21d+)" />
           <Stat value={due} label="due now" />
           <Stat value={liveStreak(streak, today())} label="current streak" />
@@ -71,6 +89,8 @@ export function DataScreen() {
           <Stat value={leeches} label="🐛 leeches" />
         </div>
       </div>
+
+      <SkillStats words={words} onPracticeTones={setTonePractice} />
 
       <SyncCard />
 

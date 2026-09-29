@@ -2549,3 +2549,42 @@ body.in-session .content {
 .grade.dim {
   opacity: 0.45;
 }
+
+/* ---------- Skill stats ---------- */
+.skill-totals {
+  margin: 0 0 4px;
+  line-height: 1.6;
+}
+.table-scroll {
+  overflow-x: auto;
+  margin-top: 8px;
+}
+.tag-table td {
+  min-width: 3.2em;
+}
+.mini-bar {
+  display: inline-block;
+  width: 18px;
+  height: 5px;
+  margin-right: 5px;
+  border-radius: 3px;
+  background: var(--surface-2);
+  vertical-align: middle;
+  overflow: hidden;
+}
+.mini-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--good);
+}
+.tones-practice h3 {
+  margin: 16px 0 6px;
+}
+.tone-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}

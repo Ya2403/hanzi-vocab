@@ -32,6 +32,8 @@ interface Props {
   /** The summary's main button; defaults to onExit. Used to chain Review → Learn → Done. */
   onFinish?(): void;
   finishLabel?: string;
+  /** Practice: test this skill on every word (e.g. pinyin for "Tones to practice"). */
+  skill?: Skill;
 }
 
 type Grades = Partial<Record<Skill, number>>;
@@ -48,7 +50,7 @@ const MATCH_BATCH = 5;
  * skills (Review: the due ones). Cards with a miss go to the back of the queue as an easier
  * card until they're right. Every answer counts toward the skill's accuracy.
  */
-export function Session({ title, words: initialWords, mode, direction, updateSchedule: initialUpdate, onExit, onFinish, finishLabel }: Props) {
+export function Session({ title, words: initialWords, mode, direction, updateSchedule: initialUpdate, onExit, onFinish, finishLabel, skill }: Props) {
   const { words: allWords, updateWord, recordReview } = useStore();
   const { writingStyle, leechThreshold, showPinyin, choiceStyle } = useSettings();
 
@@ -66,7 +68,14 @@ export function Session({ title, words: initialWords, mode, direction, updateSch
   const [queue, setQueue] = useState<Step[]>(() =>
     initialUpdate
       ? orderSteps(reviewCards(initialWords, planOpts), new Map(initialWords.map((w) => [w.id, w])))
-      : initialWords.map((w) => practiceCard(w, direction, planOpts)),
+      : initialWords.map((w) =>
+          skill === 'pinyin'
+            ? // Tone practice: type the pinyin, so the tones are really checked.
+              { id: w.id, card: { kind: 'single', skill, ex: 'typing', dir: 'zh-py' }, scheduled: [skill] }
+            : skill
+            ? { ...cardsFor(w, [skill], planOpts)[0], scheduled: [skill] }
+            : practiceCard(w, direction, planOpts),
+        ),
   );
   const [total, setTotal] = useState(() => queue.length);
   /** First answer per word|skill this session. */
