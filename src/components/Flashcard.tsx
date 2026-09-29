@@ -1,8 +1,8 @@
 import { useEffect, useState, type MouseEvent } from 'react';
-import { applyReview, formatInterval, Grade } from '../lib/srs';
-import { getSettings, usePinyinVisibility } from '../lib/settings';
+import { Grade, SKILL_LABEL } from '../lib/srs';
+import { getSettings, usePinyinVisibility, useSettings } from '../lib/settings';
 import { speak } from '../lib/speech';
-import type { CardDirection, SkillState, Word } from '../lib/types';
+import type { CardDirection, Skill, Word } from '../lib/types';
 import { SpeakButton } from './SpeakButton';
 import { Breakdown } from './Breakdown';
 import { ExampleSentence, NotesBox } from './WordExtras';
@@ -10,29 +10,44 @@ import { ExampleSentence, NotesBox } from './WordExtras';
 interface Props {
   word: Word;
   direction: CardDirection;
-  /** Show the four SM-2 grades with interval previews instead of a simple Again / Got it. */
-  graded: boolean;
-  /** The schedule being graded (for the interval previews). */
-  state?: SkillState;
-  onAnswer(quality: number): void;
+  /** The skills this card tests: one grade row each (hanzi side: meaning + pinyin; English side: recall). */
+  skills: Skill[];
+  onAnswer(grades: Partial<Record<Skill, number>>, toneError: boolean): void;
 }
 
-export function Flashcard({ word, direction, graded, state, onAnswer }: Props) {
+interface RowButton {
+  q: number;
+  label: string;
+  cls: string;
+  toneError?: boolean;
+}
+
+export function Flashcard({ word, direction, skills, onAnswer }: Props) {
   const [flipped, setFlipped] = useState(false);
   const pv = usePinyinVisibility(direction);
+  const { tones } = useSettings();
   const [revealed, setRevealed] = useState(false);
+  const [picked, setPicked] = useState<Partial<Record<Skill, RowButton>>>({});
 
-  const buttons = graded
-    ? [
-        { q: Grade.Again, label: 'Again', cls: 'again' },
-        { q: Grade.Hard, label: 'Hard', cls: 'hard' },
-        { q: Grade.Good, label: 'Good', cls: 'good' },
-        { q: Grade.Easy, label: 'Easy', cls: 'easy' },
-      ]
-    : [
-        { q: Grade.Again, label: 'Again', cls: 'again' },
-        { q: Grade.Good, label: 'Got it', cls: 'good' },
-      ];
+  const rowButtons = (k: Skill): RowButton[] => [
+    { q: Grade.Again, label: 'Forgot', cls: 'again' },
+    ...(k === 'pinyin' && tones !== 'ignore'
+      ? [{ q: tones === 'required' ? Grade.Hard : Grade.Good, label: 'Wrong tone', cls: 'hard', toneError: true }]
+      : []),
+    { q: Grade.Good, label: 'Knew it', cls: 'good' },
+  ];
+  // Keyboard: 1, 2 (3) for the first row, then the next numbers for the second.
+  const keyed = skills.flatMap((k) => rowButtons(k).map((b) => ({ k, b })));
+
+  const choose = (k: Skill, b: RowButton) => {
+    const next = { ...picked, [k]: b };
+    setPicked(next);
+    if (skills.every((x) => next[x])) {
+      const grades: Partial<Record<Skill, number>> = {};
+      for (const x of skills) grades[x] = next[x]!.q;
+      onAnswer(grades, skills.some((x) => next[x]!.toneError));
+    }
+  };
 
   const flip = () => {
     if (flipped) return;
@@ -49,8 +64,8 @@ export function Flashcard({ word, direction, graded, state, onAnswer }: Props) {
         e.preventDefault();
         flip();
       } else if (flipped) {
-        const idx = Number(e.key) - 1;
-        if (buttons[idx]) onAnswer(buttons[idx].q);
+        const hit = keyed[Number(e.key) - 1];
+        if (hit) choose(hit.k, hit.b);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -58,13 +73,15 @@ export function Flashcard({ word, direction, graded, state, onAnswer }: Props) {
   });
 
   // Pinyin follows the setting for the side being shown; tapping the characters reveals it for this card.
-  const pinyinShown = revealed || (flipped ? pv.answer : pv.question);
+  const pinyinShown = flipped ? revealed || pv.answer || skills.includes('pinyin') : !skills.includes('pinyin') && (revealed || pv.question);
   const reveal = (e: MouseEvent) => {
     e.stopPropagation(); // reveal pinyin without flipping the card
     setRevealed(true);
   };
   // In 中 → 拼音 the pinyin is the answer: tapping flips the card instead of revealing it.
-  const canReveal = !pinyinShown && direction !== 'zh-py';
+  // When pinyin is tested it can't be revealed early, and the front never shows it.
+  const testsPinyin = skills.includes('pinyin');
+  const canReveal = !pinyinShown && direction !== 'zh-py' && !testsPinyin;
   const hanziTap = canReveal ? { onClick: reveal, title: 'Tap to show pinyin' } : {};
   const pinyinLine = pinyinShown ? (
     <span className="pinyin big">{word.pinyin}</span>
@@ -117,13 +134,27 @@ export function Flashcard({ word, direction, graded, state, onAnswer }: Props) {
       </div>
 
       {flipped && (
-        <div className={`grade-buttons n${buttons.length}`}>
-          {buttons.map((b, i) => (
-            <button key={b.label} className={`grade ${b.cls}`} onClick={() => onAnswer(b.q)}>
-              <span>{b.label}</span>
-              <small>{graded && state ? formatInterval(applyReview(state, b.q).interval) : `key ${i + 1}`}</small>
-            </button>
-          ))}
+        <div className="grade-rows">
+          {(() => {
+            let n = 0;
+            return skills.map((k) => (
+              <div key={k} className="grade-row">
+                <span className="grade-row-label">{SKILL_LABEL[k]}</span>
+                <div className={`grade-buttons n${rowButtons(k).length}`}>
+                  {rowButtons(k).map((b) => (
+                    <button
+                      key={b.label}
+                      className={`grade ${b.cls} ${picked[k] ? (picked[k]!.label === b.label ? 'picked' : 'dim') : ''}`}
+                      onClick={() => choose(k, b)}
+                    >
+                      <span>{b.label}</span>
+                      <small>key {++n}</small>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ));
+          })()}
         </div>
       )}
     </div>

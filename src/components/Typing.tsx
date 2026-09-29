@@ -1,7 +1,7 @@
 import { useRef, useState, type FormEvent } from 'react';
-import { checkChinese, checkMeaning, type Check } from '../lib/answer';
+import { checkChinese, checkMeaning, checkPinyin, type Check } from '../lib/answer';
 import { Grade } from '../lib/srs';
-import { getSettings, usePinyinVisibility } from '../lib/settings';
+import { getSettings, usePinyinVisibility, useSettings } from '../lib/settings';
 import { speak } from '../lib/speech';
 import type { CardDirection, Word } from '../lib/types';
 import { SpeakButton } from './SpeakButton';
@@ -9,7 +9,8 @@ import { SpeakButton } from './SpeakButton';
 interface Props {
   word: Word;
   direction: CardDirection;
-  onAnswer(quality: number): void;
+  /** toneError: typed pinyin had the right syllables but wrong tones (Tones setting not "ignore"). */
+  onAnswer(quality: number, toneError?: boolean): void;
 }
 
 const gradeOf: Record<Check['verdict'], number> = { correct: Grade.Good, close: Grade.Hard, wrong: Grade.Again };
@@ -18,6 +19,7 @@ export function Typing({ word, direction, onAnswer }: Props) {
   const [input, setInput] = useState('');
   const [result, setResult] = useState<Check | null>(null);
   const pv = usePinyinVisibility(direction);
+  const { tones } = useSettings();
   const [revealed, setRevealed] = useState(false);
   const pinyinShown = revealed || (result ? pv.answer : pv.question);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -32,7 +34,7 @@ export function Typing({ word, direction, onAnswer }: Props) {
       setHint('Type the pinyin, e.g. ni3 hao3 or nǐ hǎo.');
       return;
     }
-    const r = toChinese || toPinyinDir ? checkChinese(answer, word) : checkMeaning(answer, word.meaning);
+    const r = toChinese ? checkChinese(answer, word, tones) : toPinyinDir ? checkPinyin(answer, word.pinyin, tones) : checkMeaning(answer, word.meaning);
     setResult(r);
     if (getSettings().autoPlay) speak(word.hanzi);
     // Keep focus in the field so Enter / the keyboard's Go button continues.
@@ -44,7 +46,7 @@ export function Typing({ word, direction, onAnswer }: Props) {
     if (!result) {
       if (input.trim()) check(input);
     } else {
-      onAnswer(gradeOf[result.verdict]);
+      onAnswer(gradeOf[result.verdict], !!result.toneError && tones !== 'ignore');
     }
   };
 
@@ -90,7 +92,7 @@ export function Typing({ word, direction, onAnswer }: Props) {
             setHint(null);
           }}
           readOnly={result !== null}
-          placeholder={toChinese ? '汉字 / ni3 hao3 / nǐ hǎo' : toPinyinDir ? 'ni3 hao3 / nǐ hǎo' : 'meaning'}
+          placeholder={toChinese ? (tones === 'ignore' ? '汉字 / ni hao' : '汉字 / ni3 hao3 / nǐ hǎo') : toPinyinDir ? (tones === 'ignore' ? 'ni hao' : 'ni3 hao3 / nǐ hǎo') : 'meaning'}
           lang={toChinese ? 'zh-CN' : 'en'}
           autoFocus
           autoComplete="off"

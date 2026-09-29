@@ -2498,3 +2498,54 @@ body.in-session .content {
 .strength-dot.veryStrong {
   background: var(--good);
 }
+
+/* ---------- Two-step card & flashcard rows ---------- */
+.two-step .answer-meaning {
+  margin-top: 4px;
+}
+.two-step-answer {
+  margin-top: 8px;
+}
+.step-results {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+.step-result {
+  font-weight: 700;
+}
+.step-result.ok {
+  color: var(--good);
+}
+.step-result.meh {
+  color: var(--warn);
+}
+.step-result.bad {
+  color: var(--bad);
+}
+.grade-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.grade-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.grade-row-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+.grade-buttons.n3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+.grade.picked {
+  outline: 3px solid currentColor;
+  outline-offset: -3px;
+}
+.grade.dim {
+  opacity: 0.45;
+}

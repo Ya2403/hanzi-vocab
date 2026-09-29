@@ -1,6 +1,8 @@
 import { useSyncExternalStore } from 'react';
 import type { CardDirection, Direction, PracticeMode } from './types';
 
+export type Tones = 'ignore' | 'show' | 'required';
+
 /** Per-device UI preferences (not vocabulary data), kept in localStorage. */
 export interface Settings {
   autoPlay: boolean;
@@ -27,6 +29,8 @@ export interface Settings {
   learnDailyLimit: number;
   /** Learn mode: finish each batch with a typing round. */
   learnTyping: boolean;
+  /** Pinyin tones: ignore (spelling only), show (marked, wrong tones accepted but counted), required (wrong tones = Close). */
+  tones: Tones;
   /** Writing skill: once a word's recall interval reaches 6 days, it is also reviewed by writing from memory. */
   writingPractice: boolean;
   /** A word becomes a leech after this many lapses. */
@@ -60,6 +64,7 @@ const defaults: Settings = {
   learnDailyLimit: 15,
   learnTyping: false,
   writingPractice: false,
+  tones: 'ignore',
   leechThreshold: 5,
   showPinyin: true,
   pinyinAfterAnswer: true,

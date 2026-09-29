@@ -274,7 +274,7 @@ function Stat({ value, label }: { value: number; label: string }) {
 }
 
 function SettingsCard({ leechCount }: { leechCount: number }) {
-  const { showPinyin, pinyinAfterAnswer, listPinyin, leechThreshold, writingPractice } = useSettings();
+  const { showPinyin, pinyinAfterAnswer, listPinyin, leechThreshold, writingPractice, tones } = useSettings();
   return (
     <div className="card form">
       <h2>Settings</h2>
@@ -301,6 +301,25 @@ function SettingsCard({ leechCount }: { leechCount: number }) {
         <input type="checkbox" checked={listPinyin} onChange={(e) => updateSettings({ listPinyin: e.target.checked })} />
         <span>Show pinyin in the word list</span>
       </label>
+
+      <Segmented
+        label="Tones"
+        value={tones}
+        onChange={(v) => updateSettings({ tones: v })}
+        options={[
+          { value: 'ignore', label: 'Ignore' },
+          { value: 'show', label: 'Show only' },
+          { value: 'required', label: 'Required' },
+        ]}
+      />
+      <p className="hint">
+        {tones === 'ignore'
+          ? 'Pinyin options have no tone marks, and typed pinyin only has to be spelled right (ü can be typed as v or u).'
+          : tones === 'show'
+            ? 'Pinyin options show tone marks. Typed pinyin with wrong tones still counts, but is noted as a tone error.'
+            : 'Tones must be right: typed pinyin with wrong or missing tones counts as Close (Hard).'}{' '}
+        Answers always show the tone marks.
+      </p>
 
       <Segmented
         label="Writing practice"

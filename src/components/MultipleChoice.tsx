@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { Grade } from '../lib/srs';
 import { getSettings, usePinyinVisibility } from '../lib/settings';
 import { speak } from '../lib/speech';
-import { normalizeSearch, toneVariants } from '../lib/pinyin';
+import { normalizeSearch } from '../lib/pinyin';
+import { pinyinDistractors, stripTones } from '../lib/pinyinOptions';
 import { shuffle } from '../lib/words';
 import type { CardDirection, Word } from '../lib/types';
 import { SpeakButton } from './SpeakButton';
@@ -26,8 +27,6 @@ interface Option {
 }
 
 const OPTION_COUNT = 4;
-/** In 中 → 拼音, how many wrong answers are the right syllables with a different tone. */
-const TONE_DISTRACTORS = 2;
 
 /** Other words that can't be confused with the answer, preferring ones that share a tag. */
 function otherWords(word: Word, pool: Word[]): Word[] {
@@ -38,10 +37,18 @@ function otherWords(word: Word, pool: Word[]): Word[] {
   return [...related, ...others];
 }
 
-function buildOptions(word: Word, pool: Word[], direction: CardDirection): Option[] {
-  const labelOf = (w: Word) => (direction === 'zh-en' ? w.meaning : direction === 'en-zh' ? w.hanzi : w.pinyin);
+function buildOptions(word: Word, pool: Word[], direction: CardDirection, toneless: boolean): Option[] {
+  if (direction === 'zh-py') {
+    // Similar-sounding pinyin, never the same syllables with other tones.
+    const shown = (p: string) => (toneless ? stripTones(p) : p);
+    return shuffle([
+      { key: word.id, label: shown(word.pinyin), correct: true },
+      ...pinyinDistractors(word, pool, OPTION_COUNT - 1).map((p, i) => ({ key: `alt:${i}`, label: shown(p), correct: false })),
+    ]);
+  }
+  const labelOf = (w: Word) => (direction === 'zh-en' ? w.meaning : w.hanzi);
   // Compare pinyin/meanings loosely so near-identical labels never appear twice.
-  const norm = (s: string) => (direction === 'zh-py' ? s.normalize('NFC').toLowerCase() : normalizeSearch(s));
+  const norm = normalizeSearch;
   const options: Option[] = [{ key: word.id, label: labelOf(word), sub: direction === 'en-zh' ? word.pinyin : undefined, correct: true }];
   const seen = new Set([norm(options[0].label)]);
   const add = (o: Option) => {
@@ -49,15 +56,8 @@ function buildOptions(word: Word, pool: Word[], direction: CardDirection): Optio
     seen.add(norm(o.label));
     options.push(o);
   };
-  if (direction === 'zh-py') {
-    for (const v of toneVariants(word.pinyin, TONE_DISTRACTORS)) add({ key: `tone:${v}`, label: v, correct: false });
-  }
   for (const w of otherWords(word, pool)) {
     add({ key: w.id, label: labelOf(w), sub: direction === 'en-zh' ? w.pinyin : undefined, correct: false });
-  }
-  if (direction === 'zh-py') {
-    // Small lists: top up with more tone variants.
-    for (const v of toneVariants(word.pinyin, 10)) add({ key: `tone:${v}`, label: v, correct: false });
   }
   return shuffle(options);
 }
@@ -70,7 +70,7 @@ const KICKER: Record<CardDirection, string> = {
 
 export function MultipleChoice({ word, allWords, direction, onAnswer }: Props) {
   // Options are fixed for the lifetime of this card (the parent re-keys per card).
-  const [options] = useState(() => buildOptions(word, allWords, direction));
+  const [options] = useState(() => buildOptions(word, allWords, direction, getSettings().tones === 'ignore'));
   const [picked, setPicked] = useState<string | null>(null);
   const answered = picked !== null;
   const correct = options.find((o) => o.key === picked)?.correct ?? false;

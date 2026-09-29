@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useStore } from './store';
 import { today } from './lib/date';
 import { useSettings } from './lib/settings';
-import { dueItems } from './lib/planner';
+import { reviewCount } from './lib/planner';
 import { liveStreak } from './lib/streak';
 import { Icon, type IconName } from './components/Icon';
 import { WordsScreen } from './screens/WordsScreen';
@@ -45,7 +45,7 @@ export default function App() {
   useSettings();
   const on = today();
   // New words are taught in Learn, so they never count as due for Review.
-  const dueCount = dueItems(words, on).length;
+  const dueCount = reviewCount(words, on);
   const streakDays = liveStreak(streak, on);
   const doneToday = streak.lastDate === on;
 

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useStore } from '../store';
 import { formatDate, today } from '../lib/date';
 import { learnedToday } from '../lib/learn';
-import { dueItems, pickPractice } from '../lib/planner';
+import { pickPractice, reviewCount as countCards } from '../lib/planner';
 import { isDueLearned, isLearned, isNew, nextDue } from '../lib/srs';
 import { liveStreak } from '../lib/streak';
 import { updateSettings, useSettings } from '../lib/settings';
@@ -36,9 +36,9 @@ export function ReviewScreen({ onGoToWords, onGoToLearn }: { onGoToWords(): void
   const newLeft = Math.min(newWords.length, Math.max(0, settings.learnDailyLimit - learnedToday(words, on)));
   const learnedWords = words.filter(isLearned);
   const filteredDue = wordsInTags(allDue, tags);
-  // One review card per due skill.
-  const reviewCount = useMemo(() => dueItems(allDue, on).length, [allDue, on]); // allDue already reflects writingPractice
-  const filteredCount = dueItems(filteredDue, on).length;
+  // Review cards: meaning + pinyin share one, recall and writing get their own.
+  const reviewCount = useMemo(() => countCards(allDue, on), [allDue, on]); // allDue already reflects writingPractice
+  const filteredCount = countCards(filteredDue, on);
   const reviewedToday = daily.date === on ? daily.reviews : 0;
   const mode = settings.autoExercise ? 'auto' : settings.reviewMode;
 
@@ -203,8 +203,7 @@ export function ReviewScreen({ onGoToWords, onGoToLearn }: { onGoToWords(): void
             </label>
             {settings.autoExercise ? (
               <p className="hint">
-                Each card’s exercise follows how well you know the word: weak words get multiple choice, then listening and
-                EN → 中, strong words typing, and very strong words sometimes writing.
+                Meaning and pinyin are asked together (the meaning first, then the pronunciation), recall on its own card. Each part is multiple choice until you know it well, then typing; medium pinyin sometimes gets listening.
               </p>
             ) : (
               <SessionOptions

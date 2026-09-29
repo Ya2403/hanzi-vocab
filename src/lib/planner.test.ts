@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chooseExercise, dueItems, isLessonTag, orderItems, pickPractice, skillStrength, strength, weakestSkill, weakness } from './planner';
+import { cardsFor, chooseExercise, isLessonTag, orderSteps, pickPractice, practiceCard, retryOf, reviewCards, testedSkills, skillStrength, strength, weakestSkill, weakness } from './planner';
 import { activeSkills, dueSkills, isDueLearned, isLeech, leechSkills, learnedSkills, newSrs, practiceMiss, recordAnswer, unmarkLeech } from './srs';
 import type { SkillState, Skills, Word } from './types';
 
@@ -99,8 +99,63 @@ describe('due skills and review cards', () => {
   it('orders cards most overdue first without the same word twice in a row', () => {
     const a = w('一', {}, { meaning: { due: '2026-09-20' }, pinyin: { due: '2026-09-21' }, recall: { due: '2026-09-22' } });
     const b = w('二', {}, { meaning: { due: '2026-09-25' } });
-    const items = orderItems(dueItems([a, b], ON), fixed(0), ON);
-    expect(items.map((it) => `${it.word.hanzi}:${it.skill}`)).toEqual(['一:meaning', '二:meaning', '一:pinyin', '一:recall']);
+    const steps = orderSteps(reviewCards([a, b], { mode: 'choice', listening: false, on: ON }), new Map([a, b].map((x) => [x.id, x])), fixed(0), ON);
+    expect(steps.map((s) => `${s.id}:${testedSkills(s.card).join('+')}`)).toEqual(['一:meaning+pinyin', '二:meaning+pinyin', '一:recall']);
+  });
+});
+
+describe('cards for due skills', () => {
+  const opts = { mode: 'auto' as const, listening: false, on: ON };
+
+  it('asks meaning and pinyin on one two-step card, scheduling only the due ones', () => {
+    const word = w('好', { reps: 1, interval: 1 }, { pinyin: { due: ON } });
+    const [step] = cardsFor(word, ['pinyin'], opts);
+    expect(step.card).toEqual({ kind: 'pair', m: 'choice', p: 'choice' });
+    expect(step.scheduled).toEqual(['pinyin']);
+  });
+
+  it('types the parts the word is strong at', () => {
+    const word = w('好', { reps: 4, interval: 20 }, { pinyin: { reps: 1, interval: 1 } });
+    expect(cardsFor(word, ['meaning', 'pinyin'], opts)[0].card).toEqual({ kind: 'pair', m: 'typing', p: 'choice' });
+  });
+
+  it('gives recall and writing their own cards', () => {
+    const word = w('好', { reps: 4, interval: 20 });
+    const kinds = cardsFor(word, ['recall', 'writing'], opts).map((s) => s.card);
+    expect(kinds).toEqual([
+      { kind: 'single', skill: 'recall', ex: 'typing', dir: 'en-zh' },
+      { kind: 'single', skill: 'writing', ex: 'writing', dir: 'en-zh' },
+    ]);
+  });
+
+  it('uses rows per skill on flashcards and meaning + recall on sentences', () => {
+    const word = w('好', {});
+    expect(cardsFor(word, ['meaning', 'recall'], { ...opts, mode: 'flashcards' }).map((s) => s.card)).toEqual([
+      { kind: 'flash', dir: 'zh-en', skills: ['meaning', 'pinyin'] },
+      { kind: 'flash', dir: 'en-zh', skills: ['recall'] },
+    ]);
+    const cloze = cardsFor(word, ['meaning', 'recall'], { ...opts, mode: 'sentence' });
+    expect(cloze.map((s) => [s.card.kind, s.scheduled])).toEqual([['cloze', ['meaning', 'recall']]]);
+  });
+
+  it('asks radical-only entries meaning on its own', () => {
+    const radical = w('氵', {});
+    expect(cardsFor(radical, ['meaning'], opts)[0].card).toMatchObject({ kind: 'single', skill: 'meaning' });
+  });
+
+  it('makes a missed card easier when it comes back', () => {
+    const word = w('好', { reps: 4, interval: 20 });
+    const [pair] = cardsFor(word, ['meaning'], opts);
+    expect(retryOf(pair).card).toEqual({ kind: 'pair', m: 'choice', p: 'choice' });
+    const [recall] = cardsFor(word, ['recall'], opts);
+    expect(retryOf(recall).card).toMatchObject({ ex: 'choice' });
+  });
+
+  it('practice schedules every skill the card tests', () => {
+    const word = w('好', { reps: 4, interval: 20 }, { pinyin: { reps: 1, interval: 1 } });
+    const step = practiceCard(word, 'mixed', opts);
+    expect(step.card.kind).toBe('pair');
+    expect(step.scheduled).toEqual(['meaning', 'pinyin']);
   });
 });
 

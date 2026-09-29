@@ -70,7 +70,7 @@ export function SentenceCloze({ word, onAnswer, onSkip }: Props) {
   const pinyinShown = revealed || (result ? pv.answer : pv.question);
 
   const check = () => {
-    setResult(checkChinese(input, word));
+    setResult(checkChinese(input, word, getSettings().tones));
     if (getSettings().autoPlay && choice) speak(choice.zh);
     inputRef.current?.focus();
   };

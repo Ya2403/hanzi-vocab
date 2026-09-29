@@ -8,7 +8,12 @@ export type Verdict = 'correct' | 'close' | 'wrong';
 export interface Check {
   verdict: Verdict;
   note?: string;
+  /** Right syllables with wrong tones (counted in the word's tone errors unless tones are ignored). */
+  toneError?: boolean;
 }
+
+/** How strictly typed pinyin tones are checked (the Tones setting). */
+export type ToneMode = 'ignore' | 'show' | 'required';
 
 const CJK = /[\u3400-\u9fff\uf900-\ufaff]/;
 
@@ -63,22 +68,35 @@ function canonicalPinyin(s: string): string {
   return toned.normalize('NFC').replace(/[\s'’·-]/g, '');
 }
 
-const tonelessPinyin = (s: string) => normalizeSearch(s).replace(/[\d'’·-]/g, '').replace(/v/g, 'u');
+/** Letters only: no tones, spaces or apostrophes, and ü / v / u all count the same. */
+export const tonelessPinyin = (s: string) => normalizeSearch(s).replace(/[\d'’·-]/g, '').replace(/v/g, 'u');
+
+/**
+ * Typed pinyin against the right pinyin.
+ * - ignore: spelling only (ü can be typed as v or u);
+ * - show: wrong tones still count as correct, but are flagged as a tone error;
+ * - required: wrong or missing tones = close (Hard).
+ */
+export function checkPinyin(input: string, answer: string, tones: ToneMode = 'ignore'): Check {
+  const text = input.trim();
+  if (!text || tonelessPinyin(text) !== tonelessPinyin(answer)) return { verdict: 'wrong' };
+  if (tones === 'ignore' || canonicalPinyin(text) === canonicalPinyin(answer)) return { verdict: 'correct' };
+  // Tone marks are combining accents after NFD; ü's diaeresis (U+0308) is not a tone.
+  const hasTones = /[1-5]/.test(text) || /[̀-̇̉-ͯ]/.test(text.normalize('NFD'));
+  if (tones === 'show') return hasTones ? { verdict: 'correct', toneError: true, note: 'Check the tones.' } : { verdict: 'correct' };
+  return {
+    verdict: 'close',
+    toneError: hasTones,
+    note: hasTones ? 'Right syllables, but check the tones.' : 'Right syllables. Add tones for full marks.',
+  };
+}
 
 /** Typed hanzi or pinyin against a word. */
-export function checkChinese(input: string, word: Word): Check {
+export function checkChinese(input: string, word: Word, tones: ToneMode = 'required'): Check {
   const text = input.trim();
   if (!text) return { verdict: 'wrong' };
-
   if (CJK.test(text)) {
     return stripHanzi(text) === stripHanzi(word.hanzi) ? { verdict: 'correct' } : { verdict: 'wrong' };
   }
-
-  if (canonicalPinyin(text) === canonicalPinyin(word.pinyin)) return { verdict: 'correct' };
-  if (tonelessPinyin(text) === tonelessPinyin(word.pinyin)) {
-    // Tone marks are combining accents after NFD; \u00fc's diaeresis (U+0308) is not a tone.
-    const hasTones = /[1-5]/.test(text) || /[\u0300-\u0307\u0309-\u036f]/.test(text.normalize('NFD'));
-    return { verdict: 'close', note: hasTones ? 'Right syllables, but check the tones.' : 'Right syllables. Add tones for full marks.' };
-  }
-  return { verdict: 'wrong' };
+  return checkPinyin(text, word.pinyin, tones);
 }

@@ -80,8 +80,7 @@ export function PracticeScreen() {
           </label>
           {settings.autoExercise ? (
             <p className="hint">
-              Weak or recently learned words get multiple choice (中 → EN), medium ones listening or EN → 中, strong ones
-              typing, and very strong ones (3+ week intervals) sometimes writing. Missed words come back as easier cards.
+              Each word is tested on its weakest skill. Meaning and pinyin are asked together (the meaning first, then the pronunciation), recall on its own card. Each part is multiple choice until you know it well, then typing; medium pinyin sometimes gets listening. Missed cards come back as multiple choice.
             </p>
           ) : (
             <SessionOptions
