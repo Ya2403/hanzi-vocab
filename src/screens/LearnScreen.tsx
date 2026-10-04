@@ -7,12 +7,38 @@ import type { Word } from '../lib/types';
 import { LearnSession } from '../components/LearnSession';
 import { Segmented } from '../components/Segmented';
 import { TagPicker, tagLabel, wordsInTags } from '../components/TagPicker';
+import { LearnSentences } from './LearnSentences';
+
+const VIEW_KEY = 'hanzi-vocab:learnView';
 
 export function LearnScreen({ onGoToWords }: { onGoToWords(): void }) {
   const { words } = useStore();
   const { learnBatchSize, learnDailyLimit, learnTyping } = useSettings();
   const [tags, setTags] = useState<string[]>([]);
   const [session, setSession] = useState<{ pool: Word[]; title: string } | null>(null);
+  const [view, setView] = useState<'words' | 'sentences'>(() => {
+    try {
+      return sessionStorage.getItem(VIEW_KEY) === 'sentences' ? 'sentences' : 'words';
+    } catch {
+      return 'words';
+    }
+  });
+  const switchView = (v: 'words' | 'sentences') => {
+    setView(v);
+    try {
+      sessionStorage.setItem(VIEW_KEY, v);
+    } catch {
+      /* ignore */
+    }
+  };
+  const goToSentences = () => {
+    try {
+      sessionStorage.setItem('hanzi-vocab:listView', 'sentences');
+    } catch {
+      /* ignore */
+    }
+    onGoToWords();
+  };
 
   const newWords = words.filter(isNew);
   const pool = wordsInTags(newWords, tags);
@@ -22,8 +48,32 @@ export function LearnScreen({ onGoToWords }: { onGoToWords(): void }) {
 
   if (session) return <LearnSession pool={session.pool} title={session.title} onExit={() => setSession(null)} />;
 
+  const viewSwitch = (
+    <div className="view-switch">
+      <Segmented
+        label="Learn"
+        value={view}
+        onChange={switchView}
+        options={[
+          { value: 'words', label: 'Words' },
+          { value: 'sentences', label: 'Sentences' },
+        ]}
+      />
+    </div>
+  );
+
+  if (view === 'sentences') {
+    return (
+      <section className="screen">
+        {viewSwitch}
+        <LearnSentences onGoToSentences={goToSentences} />
+      </section>
+    );
+  }
+
   return (
     <section className="screen">
+      {viewSwitch}
       <div className="card hero">
         <div className="hero-stats">
           <div>

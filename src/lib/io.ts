@@ -2,7 +2,7 @@ import { isValidDateStr, today } from './date';
 import { migrateLegacySrs, newSrs } from './srs';
 import { toPinyin } from './pinyin';
 import { newId, normalizeTags } from './words';
-import { SKILLS, type Dialogue, type Sentence, type SkillState, type Skills, type Word } from './types';
+import { SKILLS, type Dialogue, type Sentence, type SentenceSkills, type SkillState, type Skills, type Word } from './types';
 
 const FORMAT = 'hanzi-vocab';
 /**
@@ -81,9 +81,25 @@ export function normalizeSentence(raw: unknown, fallbackTime: number = Date.now(
     dialogueId: str(r.dialogueId) || undefined,
     wordIds: ids.length ? ids : undefined,
     tatoebaId: typeof r.tatoebaId === 'number' ? r.tatoebaId : undefined,
+    ...sentenceSkills(r.skills, r.learnedOn),
     createdAt: num(r.createdAt, fallbackTime),
     updatedAt: num(r.updatedAt, fallbackTime),
   };
+}
+
+/** A sentence's skills (understand / produce) and learned date, if it has been learned. */
+function sentenceSkills(raw: unknown, learnedOn: unknown): Pick<Sentence, 'skills' | 'learnedOn'> {
+  if (!raw || typeof raw !== 'object') return {};
+  const skills: SentenceSkills = {};
+  for (const k of ['understand', 'produce'] as const) {
+    const v = (raw as Record<string, unknown>)[k];
+    if (v && typeof v === 'object') {
+      const { learnedOn: _legacy, ...state } = normalizeSrs(v);
+      skills[k] = state;
+    }
+  }
+  if (!skills.understand) return {};
+  return { skills, learnedOn: isValidDateStr(learnedOn) ? learnedOn : undefined };
 }
 
 /** A dialogue; lines pointing at sentences that aren't in the file are dropped. */

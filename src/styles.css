@@ -2759,3 +2759,156 @@ body.in-session .content {
 .sentence-preview li {
   flex-wrap: wrap;
 }
+
+/* ---------- Learning sentences ---------- */
+.tappable {
+  position: relative;
+}
+.tappable .seg {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0 1px;
+  margin: 0;
+  border-bottom: 1px dotted var(--border);
+  cursor: pointer;
+  border-radius: 3px;
+}
+.tappable .seg:hover,
+.tappable .seg.open {
+  background: var(--accent-soft);
+  border-bottom-color: var(--accent);
+}
+.seg-info {
+  display: block;
+  margin-top: 6px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+.prompt-sentence {
+  font-size: 1.6rem;
+  line-height: 1.6;
+}
+.sentence-head.center {
+  justify-content: center;
+}
+.sentence-reveal {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+}
+.sentence-reveal .sentence-zh {
+  font-size: 1.35rem;
+}
+.word-chip small {
+  font-size: 0.75em;
+}
+.tile-line {
+  min-height: 56px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 10px;
+  border: 2px dashed var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.tile-line.is-right {
+  border-color: var(--good);
+  background: var(--good-soft);
+}
+.tile-line.is-wrong {
+  border-color: var(--bad);
+  background: var(--bad-soft);
+}
+.tile-bank {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+.tile {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-bottom-width: 3px;
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 1.3rem;
+  cursor: pointer;
+}
+.tile small {
+  font-size: 0.7rem;
+}
+.tile:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+.tile.placed {
+  font-size: 1.2rem;
+  padding: 6px 10px;
+}
+.tile.placed:disabled {
+  opacity: 1;
+}
+.read-through .card {
+  text-align: left;
+}
+.read-title {
+  margin: 4px 0 8px;
+}
+.read-lines {
+  margin-top: 12px;
+}
+.read-lines .dialogue-line {
+  cursor: default;
+}
+.learn-groups {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.learn-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.learn-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.learn-group-title {
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+.status.ready {
+  background: var(--good-soft);
+  color: var(--good);
+  font-weight: 600;
+}
+.learn-group-actions {
+  flex-wrap: wrap;
+}
+.learned-groups summary {
+  cursor: pointer;
+}
+body.in-session .view-switch {
+  display: none;
+}

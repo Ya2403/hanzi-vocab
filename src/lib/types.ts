@@ -84,9 +84,17 @@ export interface Sentence {
   wordIds?: string[];
   /** Tatoeba sentence id, for attribution. */
   tatoebaId?: number;
+  /** Review schedules, set once the sentence is learned in Learn (none = new). */
+  skills?: SentenceSkills;
+  /** Local date the sentence was learned. */
+  learnedOn?: string;
   createdAt: number;
   updatedAt: number;
 }
+
+/** understand: Chinese → meaning. produce: meaning → Chinese. */
+export type SentenceSkill = 'understand' | 'produce';
+export type SentenceSkills = Partial<Record<SentenceSkill, SkillState>>;
 
 export type SentenceInput = Pick<Sentence, 'zh' | 'pinyin' | 'translation' | 'tags' | 'notes' | 'wordIds' | 'tatoebaId'>;
 

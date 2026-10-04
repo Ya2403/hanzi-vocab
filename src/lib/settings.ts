@@ -30,6 +30,10 @@ export interface Settings {
   learnBatchSize: number;
   /** Learn mode: new words per day. */
   learnDailyLimit: number;
+  /** Learn mode: new sentences per day. */
+  sentenceDailyLimit: number;
+  /** A sentence is ready to learn when at least this % of its words are learned. */
+  sentenceReadyPercent: number;
   /** Learn mode: finish each batch with a typing round. */
   learnTyping: boolean;
   /** Pinyin tones: ignore (spelling only), show (marked, wrong tones accepted but counted), required (wrong tones = Close). */
@@ -66,6 +70,8 @@ const defaults: Settings = {
   practiceSize: 20,
   learnBatchSize: 6,
   learnDailyLimit: 15,
+  sentenceDailyLimit: 6,
+  sentenceReadyPercent: 70,
   learnTyping: false,
   writingPractice: false,
   tones: 'ignore',
