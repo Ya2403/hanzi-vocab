@@ -2,14 +2,14 @@ import { useDeferredValue, useMemo, useRef, useState, type ChangeEvent } from 'r
 import { useStore } from '../store';
 import { BULK_PROMPT, parseBulk } from '../lib/bulk';
 import { createWord, parseTagText } from '../lib/words';
-import type { Word, WordInput } from '../lib/types';
+import type { NewWord, Word } from '../lib/types';
 import { Segmented } from './Segmented';
 import { Modal } from './Modal';
 
 const PREVIEW_LIMIT = 200;
 
 export function BulkAdd({ onClose }: { onClose(): void }) {
-  const { words, addWords, updateWords, importWords } = useStore();
+  const { words, sentences, dialogues, addWords, updateWords, importData } = useStore();
   /** What to do with pasted words that are already in the list. */
   const [mode, setMode] = useState<'new' | 'update' | 'replace'>('new');
   const [text, setText] = useState('');
@@ -72,21 +72,17 @@ export function BulkAdd({ onClose }: { onClose(): void }) {
     setError(null);
     try {
       const extra = parseTagText(extraTags);
-      const input = (w: WordInput): WordInput => ({ ...w, tags: [...w.tags, ...extra] });
+      const input = (w: NewWord): NewWord => ({ ...w, tags: [...w.tags, ...extra] });
       // An existing word gets the pasted content; its id, progress and notes stay. Empty pasted
       // fields (example, tags) don't wipe what the word already has.
-      const merged = (w: Word, p: WordInput): Word => {
-        const newExample = p.example && p.example !== w.example;
-        return {
-          ...w,
-          pinyin: p.pinyin || w.pinyin,
-          meaning: p.meaning || w.meaning,
-          example: p.example || w.example,
-          exampleTranslation: newExample ? undefined : w.exampleTranslation,
-          exampleRef: newExample ? undefined : w.exampleRef,
-          tags: p.tags.length ? [...p.tags, ...extra] : [...w.tags, ...extra],
-        };
-      };
+      // A pasted example becomes a sentence linked to the word (see the store).
+      const merged = (w: Word, p: NewWord): Word => ({
+        ...w,
+        pinyin: p.pinyin || w.pinyin,
+        meaning: p.meaning || w.meaning,
+        example: p.example || undefined,
+        tags: p.tags.length ? [...p.tags, ...extra] : [...w.tags, ...extra],
+      });
       if (mode === 'new') {
         await addWords(fresh.map((r) => input(r.word)));
       } else if (mode === 'update') {
@@ -107,9 +103,10 @@ export function BulkAdd({ onClose }: { onClose(): void }) {
           if (seen.has(r.word.hanzi)) return; // repeats in the pasted text
           seen.add(r.word.hanzi);
           const old = byHanzi.get(r.word.hanzi);
-          list.push(old ? merged(old, r.word) : createWord(input(r.word), now + i));
+          const fresh = input(r.word);
+          list.push(old ? merged(old, r.word) : { ...createWord(fresh, now + i), example: fresh.example || undefined });
         });
-        await importWords(list, 'replace');
+        await importData({ words: list, sentences, dialogues, hasSentences: true }, 'replace');
       }
       onClose();
     } catch (e) {
@@ -167,7 +164,7 @@ export function BulkAdd({ onClose }: { onClose(): void }) {
             spellCheck={false}
           />
           <input ref={fileRef} type="file" accept=".txt,.tsv,.csv,.json,.md,text/*,application/json" hidden onChange={onFile} />
-          <span className="hint">One word per line: hanzi | pinyin | meaning | example | tags. Missing pinyin is generated.</span>
+          <span className="hint">One word per line: hanzi | pinyin | meaning | example | tags. Missing pinyin is generated. An example becomes a sentence linked to the word (add its translation later in Words → Sentences).</span>
         </div>
 
         <Segmented

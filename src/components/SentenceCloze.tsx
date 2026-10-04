@@ -10,6 +10,7 @@ import type { Word } from '../lib/types';
 import { Highlighted } from './Sentences';
 import { SpeakButton } from './SpeakButton';
 import { TatoebaCredit } from './WordExtras';
+import { useWordSentences } from './WordExtras';
 
 interface Props {
   word: Word;
@@ -40,10 +41,11 @@ export function SentenceCloze({ word, onAnswer, onSkip }: Props) {
   const target = word.hanzi.trim();
   const useTatoeba = sentenceSource === 'both';
   const { status, corpus, retry } = useCorpus(useTatoeba);
-  const mine: Candidate | null =
-    word.example && target && word.example.includes(target)
-      ? { key: `mine:${word.example}`, zh: word.example, en: word.exampleTranslation, zhId: word.exampleRef }
-      : null;
+  // Your own sentences that contain the word.
+  const mineList: Candidate[] = useWordSentences(word)
+    .filter((s) => target && s.zh.includes(target))
+    .map((s) => ({ key: `mine:${s.id}`, zh: s.zh, en: s.translation || undefined, zhId: s.tatoebaId }));
+  const mine = mineList[0] ?? null;
   const ready = !useTatoeba || status === 'ready' || status === 'error';
 
   const [choice, setChoice] = useState<Candidate | null | undefined>(undefined);
@@ -53,7 +55,7 @@ export function SentenceCloze({ word, onAnswer, onSkip }: Props) {
     if (picked.current || !ready) return;
     if (useTatoeba && status === 'error' && !mine) return; // offline: offer Retry below
     picked.current = true;
-    const list: Candidate[] = mine ? [mine] : [];
+    const list: Candidate[] = [...mineList];
     if (corpus) {
       for (const m of findSentences(corpus, word, words, TATOEBA_CHOICES)) {
         if (list.some((c) => c.zh === m.sentence.zh)) continue;

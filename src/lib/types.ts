@@ -42,10 +42,12 @@ export interface Word {
   hanzi: string;
   pinyin: string;
   meaning: string;
+  /**
+   * Legacy: before Sentence items, a word had one example sentence here. Words that still have
+   * one (old backups, devices on an older version) are migrated into Sentences linked to the word.
+   */
   example?: string;
-  /** English translation of the example (set when it came from Tatoeba). */
   exampleTranslation?: string;
-  /** Tatoeba sentence id of the example, for attribution. */
   exampleRef?: number;
   /** Free-form notes or a memory trick (mnemonic). */
   notes?: string;
@@ -60,7 +62,50 @@ export interface Word {
 }
 
 /** Fields the user edits directly. */
-export type WordInput = Pick<Word, 'hanzi' | 'pinyin' | 'meaning' | 'example' | 'exampleTranslation' | 'exampleRef' | 'notes' | 'tags'>;
+export type WordInput = Pick<Word, 'hanzi' | 'pinyin' | 'meaning' | 'notes' | 'tags'>;
+
+/** A word as added by hand or in bulk; `example` becomes a Sentence linked to the word. */
+export type NewWord = WordInput & { example?: string };
+
+/** A Chinese sentence with its own translation (learned and reviewed like words, see Sentences). */
+export interface Sentence {
+  id: string;
+  /** The sentence in Chinese characters. */
+  zh: string;
+  /** Generated from zh until edited. */
+  pinyin: string;
+  /** English translation; empty = needs translation. */
+  translation: string;
+  tags: string[];
+  notes?: string;
+  /** The dialogue this sentence is a line of. */
+  dialogueId?: string;
+  /** Words linked by hand (e.g. the word whose example it was), on top of the automatic links. */
+  wordIds?: string[];
+  /** Tatoeba sentence id, for attribution. */
+  tatoebaId?: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export type SentenceInput = Pick<Sentence, 'zh' | 'pinyin' | 'translation' | 'tags' | 'notes' | 'wordIds' | 'tatoebaId'>;
+
+export interface DialogueLine {
+  sentenceId: string;
+  /** "A", "B" or a name; optional. */
+  speaker?: string;
+}
+
+/** A lesson text: an ordered list of sentence lines with speakers. */
+export interface Dialogue {
+  id: string;
+  /** e.g. "第一课 课文3" */
+  title: string;
+  tags: string[];
+  lines: DialogueLine[];
+  createdAt: number;
+  updatedAt: number;
+}
 
 export type PracticeMode = 'flashcards' | 'choice' | 'typing' | 'writing' | 'sentence';
 /** zh-en: show Chinese, recall meaning. en-zh: show meaning, recall Chinese. zh-py: show Chinese, recall pinyin. */

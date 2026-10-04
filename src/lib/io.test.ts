@@ -84,3 +84,32 @@ describe('migration from a single schedule (old backups and stored words)', () =
     expect(isLearned(legacy({ interval: 1, reps: 0, lapses: 2, lastReviewed: '2026-09-28' }))).toBe(true);
   });
 });
+
+describe('sentences and dialogues in backups', () => {
+  it('imports sentences and dialogues, dropping lines that point nowhere', () => {
+    const file = JSON.stringify({
+      version: 3,
+      words: [{ hanzi: '你好', meaning: 'hello' }],
+      sentences: [
+        { id: 's1', zh: '你好！', translation: 'Hello!', tags: ['lesson 1'], dialogueId: 'd1' },
+        { id: 's2', zh: '我是学生。', translation: '' },
+        { id: 'bad', translation: 'no chinese' },
+      ],
+      dialogues: [{ id: 'd1', title: '第一课', lines: [{ sentenceId: 's1', speaker: 'A' }, { sentenceId: 'missing' }] }],
+    });
+    const data = parseImport(file);
+    expect(data.hasSentences).toBe(true);
+    expect(data.sentences.map((x) => [x.id, x.translation])).toEqual([
+      ['s1', 'Hello!'],
+      ['s2', ''],
+    ]);
+    expect(data.sentences[1].pinyin).toContain('xué');
+    expect(data.dialogues[0]).toMatchObject({ id: 'd1', title: '第一课', lines: [{ sentenceId: 's1', speaker: 'A' }] });
+  });
+
+  it('keeps old backups word examples for the migration to sentences', () => {
+    const data = parseImport(JSON.stringify({ version: 2, words: [{ hanzi: '猫', meaning: 'cat', example: '我有猫。' }] }));
+    expect(data.hasSentences).toBe(false);
+    expect(data.words[0].example).toBe('我有猫。');
+  });
+});

@@ -12,13 +12,19 @@ export interface Tombstone {
   updatedAt: number;
 }
 
-export type RemoteDoc = Word | Tombstone;
+/** Anything synced: words, sentences, dialogues. */
+export interface Item {
+  id: string;
+  updatedAt: number;
+}
+
+export type RemoteDoc = Item | Tombstone;
 
 export const isTombstone = (d: RemoteDoc): d is Tombstone => (d as Tombstone).deleted === true;
 
 /** Which remote changes to apply locally. */
-export function planRemoteApply(local: Map<string, Word>, remote: RemoteDoc[]): { upserts: Word[]; deletes: string[] } {
-  const upserts: Word[] = [];
+export function planRemoteApply<T extends Item>(local: Map<string, T>, remote: RemoteDoc[]): { upserts: T[]; deletes: string[] } {
+  const upserts: T[] = [];
   const deletes: string[] = [];
   for (const r of remote) {
     const l = local.get(r.id);
@@ -26,14 +32,14 @@ export function planRemoteApply(local: Map<string, Word>, remote: RemoteDoc[]): 
       // A local edit made after the deletion wins (and will be pushed back up).
       if (l && l.updatedAt <= r.updatedAt) deletes.push(r.id);
     } else if (!l || r.updatedAt > l.updatedAt) {
-      upserts.push(r);
+      upserts.push(r as T);
     }
   }
   return { upserts, deletes };
 }
 
 /** On the first sync from a device: local words the server doesn't have, or has an older version of. */
-export function planInitialPush(local: Word[], remote: Map<string, RemoteDoc>): Word[] {
+export function planInitialPush<T extends Item>(local: T[], remote: Map<string, RemoteDoc>): T[] {
   return local.filter((l) => {
     const r = remote.get(l.id);
     return !r || l.updatedAt > r.updatedAt;

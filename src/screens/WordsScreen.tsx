@@ -5,7 +5,7 @@ import { normalizeSearch, toPinyin } from '../lib/pinyin';
 import { isDueLearned, isLeech, isNew, leechSkills, LEECH_FILTER, nextDue } from '../lib/srs';
 import { strength, type Strength } from '../lib/planner';
 import { updateSettings, useSettings } from '../lib/settings';
-import { LeechBadge } from '../components/WordExtras';
+import { LeechBadge, useWordSentences } from '../components/WordExtras';
 import { sampleWords } from '../lib/sample';
 import type { Word } from '../lib/types';
 import { Icon } from '../components/Icon';
@@ -13,11 +13,15 @@ import { SpeakButton } from '../components/SpeakButton';
 import { WordForm } from '../components/WordForm';
 import { BulkAdd } from '../components/BulkAdd';
 import { WordDetail } from '../components/WordDetail';
+import { Segmented } from '../components/Segmented';
+import { DialoguesView, SentencesView } from './SentencesScreen';
 
 type Sort = 'newest' | 'oldest' | 'due' | 'pinyin';
+type ListView = 'words' | 'sentences' | 'dialogues';
+const VIEW_KEY = 'hanzi-vocab:listView';
 
 export function WordsScreen() {
-  const { words, loading, deleteWord, addWords } = useStore();
+  const { words, sentences, dialogues, loading, deleteWord, addWords } = useStore();
   const [query, setQuery] = useState('');
   const [tag, setTag] = useState<string | null>(null);
   const { listPinyin } = useSettings();
@@ -26,6 +30,22 @@ export function WordsScreen() {
   const [editing, setEditing] = useState<Word | 'new' | null>(null);
   const [bulk, setBulk] = useState(false);
   const [detail, setDetail] = useState<Word | null>(null);
+  // Words / Sentences / Dialogues (remembered for this visit).
+  const [view, setView] = useState<ListView>(() => {
+    try {
+      return (sessionStorage.getItem(VIEW_KEY) as ListView | null) ?? 'words';
+    } catch {
+      return 'words';
+    }
+  });
+  const switchView = (v: ListView) => {
+    setView(v);
+    try {
+      sessionStorage.setItem(VIEW_KEY, v);
+    } catch {
+      /* ignore */
+    }
+  };
 
   const tagCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -60,8 +80,49 @@ export function WordsScreen() {
 
   if (loading) return <div className="empty">Loading…</div>;
 
+  const viewSwitch = (
+    <div className="view-switch">
+      <Segmented
+        label="Show"
+        value={view}
+        onChange={switchView}
+        options={[
+          { value: 'words', label: `Words` },
+          { value: 'sentences', label: `Sentences${sentences.length ? ` · ${sentences.length}` : ''}` },
+          { value: 'dialogues', label: `Dialogues${dialogues.length ? ` · ${dialogues.length}` : ''}` },
+        ]}
+      />
+    </div>
+  );
+  const wordModals = (
+    <>
+      {detail && (
+        <WordDetail
+          word={detail}
+          onClose={() => setDetail(null)}
+          onEdit={(w) => {
+            setDetail(null);
+            setEditing(w);
+          }}
+        />
+      )}
+      {editing && <WordForm word={editing === 'new' ? undefined : editing} onClose={() => setEditing(null)} />}
+    </>
+  );
+
+  if (view !== 'words') {
+    return (
+      <section className="screen">
+        {viewSwitch}
+        {view === 'sentences' ? <SentencesView onOpenWord={setDetail} /> : <DialoguesView onOpenWord={setDetail} />}
+        {wordModals}
+      </section>
+    );
+  }
+
   return (
     <section className="screen">
+      {viewSwitch}
       {words.length === 0 ? (
         <div className="empty card">
           <div className="empty-mark" lang="zh-CN">词</div>
@@ -155,17 +216,7 @@ export function WordsScreen() {
         <Icon name="plus" size={26} />
       </button>
 
-      {detail && (
-        <WordDetail
-          word={detail}
-          onClose={() => setDetail(null)}
-          onEdit={(w) => {
-            setDetail(null);
-            setEditing(w);
-          }}
-        />
-      )}
-      {editing && <WordForm word={editing === 'new' ? undefined : editing} onClose={() => setEditing(null)} />}
+      {wordModals}
       {bulk && <BulkAdd onClose={() => setBulk(false)} />}
     </section>
   );
@@ -186,6 +237,7 @@ function WordRow({
   onEdit(): void;
   onDelete(): void;
 }) {
+  const [example] = useWordSentences(word);
   const status = isNew(word) ? (
     <span className="status new">new</span>
   ) : (
@@ -205,9 +257,9 @@ function WordRow({
           {showPinyin && <span className="pinyin">{word.pinyin}</span>}
         </div>
         <div className="meaning">{word.meaning}</div>
-        {word.example && (
+        {example && (
           <div className="example" lang="zh-CN">
-            {word.example}
+            {example.zh}
           </div>
         )}
         <div className="word-meta">

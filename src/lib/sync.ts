@@ -2,15 +2,15 @@
  * Cloud sync through Firebase (Google sign-in + Firestore). The app itself stays on GitHub
  * Pages; Firebase only stores a copy of the words and progress so devices can share them.
  *
- * Data: users/{uid}/words/{wordId} (a Word, or a tombstone) and users/{uid}/meta/state.
- * Each device keeps its own IndexedDB copy and works offline; Firestore queues writes offline
- * and delivers other devices' changes when online. Firebase code is only loaded once sync is on.
+ * Data: users/{uid}/{words|sentences|dialogues}/{id} (an item, or a tombstone) and
+ * users/{uid}/meta/state. Each device keeps its own IndexedDB copy and works offline; Firestore
+ * queues writes offline and delivers other devices' changes when online. Firebase code is only
+ * loaded once sync is on.
  */
 import { useSyncExternalStore } from 'react';
 import type { Auth, User } from 'firebase/auth';
 import type { Firestore, Unsubscribe } from 'firebase/firestore';
-import { dedupeByHanzi, mergeMeta, planInitialPush, planRemoteApply, sameMeta, type RemoteDoc, type SyncMeta } from './syncMerge';
-import type { Word } from './types';
+import { mergeMeta, planInitialPush, planRemoteApply, sameMeta, type Item, type RemoteDoc, type SyncMeta } from './syncMerge';
 
 // Public web config (not a secret: access is enforced by Firestore rules + Google sign-in).
 const firebaseConfig = {
@@ -22,14 +22,25 @@ const firebaseConfig = {
   appId: '1:1014644514692:web:1152e66561aa7837d547d1',
 };
 
+export type Collection = 'words' | 'sentences' | 'dialogues';
+export const COLLECTIONS: Collection[] = ['words', 'sentences', 'dialogues'];
+
 const ENABLED_KEY = 'hanzi-vocab:sync';
-const cursorKey = (uid: string) => `hanzi-vocab:syncCursor:${uid}`;
+/** Words keep the original key; the other collections get their own cursor. */
+const cursorKey = (uid: string, col: Collection = 'words') => `hanzi-vocab:syncCursor:${uid}${col === 'words' ? '' : `:${col}`}`;
 const BATCH = 400; // Firestore allows 500 writes per batch
+
+export interface CollectionHost {
+  get(): Item[];
+  /** Apply remote changes locally (without pushing them back). */
+  applyRemote(upserts: Item[], deleteIds: string[]): Promise<void>;
+  /** Items to drop after merging (e.g. the same word added separately on two devices). */
+  duplicates?(items: Item[]): Item[];
+}
 
 /** What the app provides to sync: read local data and apply remote changes (without re-pushing). */
 export interface SyncHost {
-  getWords(): Word[];
-  applyRemote(upserts: Word[], deleteIds: string[]): Promise<void>;
+  collections: Record<Collection, CollectionHost>;
   getMeta(): SyncMeta;
   applyMeta(meta: SyncMeta): Promise<void>;
 }
@@ -162,7 +173,7 @@ export async function signOutSync() {
   // Signing in again later should do a full comparison, so nothing changed meanwhile is missed.
   if (user) {
     try {
-      localStorage.removeItem(cursorKey(user.uid));
+      for (const col of COLLECTIONS) localStorage.removeItem(cursorKey(user.uid, col));
     } catch {
       /* ignore */
     }
@@ -181,9 +192,9 @@ function stopListening() {
   unsubs = [];
 }
 
-function readCursor(uid: string): number {
+function readCursor(uid: string, col: Collection): number {
   try {
-    return Number(localStorage.getItem(cursorKey(uid)) ?? 0) || 0;
+    return Number(localStorage.getItem(cursorKey(uid, col)) ?? 0) || 0;
   } catch {
     return 0;
   }
@@ -191,15 +202,26 @@ function readCursor(uid: string): number {
 
 function listen(u: User) {
   if (!fb || !host) return;
-  const { db, f } = fb;
-  const h = host;
   setStatus({ state: 'syncing', email: u.email ?? undefined, name: u.displayName ?? undefined, error: undefined });
+  const synced = new Set<Collection>();
+  for (const col of COLLECTIONS) {
+    listenCollection(u, col, (fromCache) => {
+      if (fromCache) return setStatus({ state: 'offline' });
+      synced.add(col);
+      if (synced.size === COLLECTIONS.length) setStatus({ state: 'synced', lastSync: Date.now() });
+    });
+  }
+  listenMeta(u);
+}
 
+function listenCollection(u: User, col: Collection, onApplied: (fromCache: boolean) => void) {
+  const { db, f } = fb!;
+  const h = host!.collections[col];
   // Only changes since the last sync (server time, so device clocks don't matter).
-  const cursor = readCursor(u.uid);
-  const col = f.collection(db, 'users', u.uid, 'words');
-  const q = cursor ? f.query(col, f.where('syncedAt', '>', f.Timestamp.fromMillis(cursor))) : col;
-  // First sync from this device: upload local words once the server (not the offline cache) has answered.
+  const cursor = readCursor(u.uid, col);
+  const ref = f.collection(db, 'users', u.uid, col);
+  const q = cursor ? f.query(ref, f.where('syncedAt', '>', f.Timestamp.fromMillis(cursor))) : ref;
+  // First sync of this collection from this device: upload local items once the server (not the offline cache) has answered.
   let initialPushDone = cursor !== 0;
 
   unsubs.push(
@@ -207,7 +229,7 @@ function listen(u: User) {
       q,
       (snap) => {
         const remote: RemoteDoc[] = [];
-        let maxSynced = readCursor(u.uid);
+        let maxSynced = readCursor(u.uid, col);
         for (const ch of snap.docChanges()) {
           if (ch.type === 'removed' || ch.doc.metadata.hasPendingWrites) continue; // our own unconfirmed writes
           const data = ch.doc.data() as Record<string, unknown> & { syncedAt?: { toMillis(): number } };
@@ -227,37 +249,40 @@ function listen(u: User) {
           : [];
         chain = chain
           .then(async () => {
-            const local = new Map(h.getWords().map((w) => [w.id, w]));
+            const local = new Map(h.get().map((it) => [it.id, it]));
             const { upserts, deletes } = planRemoteApply(local, remote);
             if (upserts.length || deletes.length) await h.applyRemote(upserts, deletes);
             // First sync from this device: upload what the cloud doesn't have yet.
             if (doInitialPush) {
               const remoteMap = new Map(allRemote.map((r) => [r.id, r]));
-              await pushWords(planInitialPush(h.getWords(), remoteMap));
+              await pushItems(col, planInitialPush(h.get(), remoteMap));
             }
-            // Same word added separately on two devices: keep one.
-            const { drop } = dedupeByHanzi(h.getWords());
+            const drop = h.duplicates?.(h.get()) ?? [];
             if (drop.length) {
-              const ids = drop.map((w) => w.id);
+              const ids = drop.map((it) => it.id);
               await h.applyRemote([], ids);
-              await pushDeletes(ids);
+              await pushItemDeletes(col, ids);
             }
             if (!fromCache) {
               try {
-                localStorage.setItem(cursorKey(u.uid), String(maxSynced));
+                localStorage.setItem(cursorKey(u.uid, col), String(maxSynced));
               } catch {
                 /* ignore */
               }
             }
-            setStatus(fromCache ? { state: 'offline' } : { state: 'synced', lastSync: Date.now() });
+            onApplied(fromCache);
           })
           .catch(fail);
       },
       (e) => fail(e),
     ),
   );
+}
 
-  // Streak and daily counter.
+/** Streak and daily counter. */
+function listenMeta(u: User) {
+  const { db, f } = fb!;
+  const h = host!;
   const metaRef = f.doc(db, 'users', u.uid, 'meta', 'state');
   unsubs.push(
     f.onSnapshot(
@@ -282,30 +307,33 @@ function listen(u: User) {
 
 // ---------- Pushing local changes ----------
 
-async function writeBatches(docs: { id: string; data: Record<string, unknown> }[]) {
+async function writeBatches(col: Collection, docs: { id: string; data: Record<string, unknown> }[]) {
   if (!fb || !user || !docs.length) return;
   const { db, f } = fb;
   const uid = user.uid;
   for (let i = 0; i < docs.length; i += BATCH) {
     const batch = f.writeBatch(db);
     for (const d of docs.slice(i, i + BATCH)) {
-      batch.set(f.doc(db, 'users', uid, 'words', d.id), { ...d.data, syncedAt: f.serverTimestamp() });
+      batch.set(f.doc(db, 'users', uid, col, d.id), { ...d.data, syncedAt: f.serverTimestamp() });
     }
     // Don't await the server: offline, Firestore queues these and sends them later.
     batch.commit().catch(fail);
   }
 }
 
-/** Upload new or changed words (no-op when sync is off). */
-export function pushWords(words: Word[]): Promise<void> {
-  return writeBatches(words.map((w) => ({ id: w.id, data: { ...w } })));
+/** Upload new or changed items (no-op when sync is off). */
+export function pushItems(col: Collection, items: Item[]): Promise<void> {
+  return writeBatches(col, items.map((it) => ({ id: it.id, data: { ...it } })));
 }
 
-/** Upload deletions as tombstones so other devices remove the words too. */
-export function pushDeletes(ids: string[]): Promise<void> {
+/** Upload deletions as tombstones so other devices remove the items too. */
+export function pushItemDeletes(col: Collection, ids: string[]): Promise<void> {
   const now = Date.now();
-  return writeBatches(ids.map((id) => ({ id, data: { id, deleted: true, updatedAt: now } })));
+  return writeBatches(col, ids.map((id) => ({ id, data: { id, deleted: true, updatedAt: now } })));
 }
+
+export const pushWords = (items: Item[]) => pushItems('words', items);
+export const pushDeletes = (ids: string[]) => pushItemDeletes('words', ids);
 
 export async function pushMeta(meta: SyncMeta): Promise<void> {
   if (!fb || !user) return;
@@ -316,22 +344,23 @@ export async function pushMeta(meta: SyncMeta): Promise<void> {
 export const syncActive = () => !!user;
 
 /**
- * "Replace all": upload the new list and delete every other word in the cloud, including words
- * that only exist there or on another device (so every device ends up with exactly this list).
+ * "Replace all": upload the new list and delete every other item of the collection in the cloud,
+ * including ones that only exist there or on another device (so every device ends up with
+ * exactly this list).
  */
-export async function replaceAllRemote(words: Word[], removedLocally: string[]): Promise<void> {
+export async function replaceAllRemote(col: Collection, items: Item[], removedLocally: string[]): Promise<void> {
   if (!fb || !user) return;
-  const keep = new Set(words.map((w) => w.id));
+  const keep = new Set(items.map((it) => it.id));
   const { db, f } = fb;
   const remoteIds: string[] = [];
   try {
-    const snap = await f.getDocs(f.collection(db, 'users', user.uid, 'words'));
+    const snap = await f.getDocs(f.collection(db, 'users', user.uid, col));
     snap.forEach((d) => {
       if (d.data().deleted !== true && !keep.has(d.id)) remoteIds.push(d.id);
     });
   } catch (e) {
-    console.warn('Sync: could not list cloud words; deleting the local ones only', e);
+    console.warn(`Sync: could not list cloud ${col}; deleting the local ones only`, e);
   }
-  await pushDeletes([...new Set([...removedLocally, ...remoteIds])]);
-  await pushWords(words);
+  await pushItemDeletes(col, [...new Set([...removedLocally, ...remoteIds])]);
+  await pushItems(col, items);
 }

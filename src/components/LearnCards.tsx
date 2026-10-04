@@ -9,7 +9,7 @@ import { shuffle } from '../lib/words';
 import type { Word } from '../lib/types';
 import { Icon } from './Icon';
 import { SpeakButton } from './SpeakButton';
-import { ExampleSentence, NotesBox } from './WordExtras';
+import { WordExamples, NotesBox } from './WordExtras';
 
 /** Play once when a card appears (respecting the auto-play setting), even under StrictMode. */
 function useAutoPlay(text: string) {
@@ -89,9 +89,7 @@ export function TeachCard({ word, onDone }: { word: Word; onDone(): void }) {
         {radical && <p className="hint">A radical form: you’ll learn to recognize it inside other characters.</p>}
         <ComponentLines word={word} />
         <NotesBox notes={word.notes} />
-        {word.example && (
-          <ExampleSentence text={word.example} pinyinVisible translation={word.exampleTranslation} tatoebaId={word.exampleRef} />
-        )}
+        <WordExamples word={word} pinyinVisible />
       </div>
       <button className="btn primary teach-done" onClick={onDone} autoFocus>
         Got it

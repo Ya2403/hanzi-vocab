@@ -2,14 +2,23 @@ import { isValidDateStr, today } from './date';
 import { migrateLegacySrs, newSrs } from './srs';
 import { toPinyin } from './pinyin';
 import { newId, normalizeTags } from './words';
-import { SKILLS, type SkillState, type Skills, type Word } from './types';
+import { SKILLS, type Dialogue, type Sentence, type SkillState, type Skills, type Word } from './types';
 
 const FORMAT = 'hanzi-vocab';
-/** 2: per-skill schedules (`skills`). Version 1 files (one `srs` schedule) are migrated on import. */
-const VERSION = 2;
+/**
+ * 2: per-skill schedules (`skills`). Version 1 files (one `srs` schedule) are migrated on import.
+ * 3: sentences and dialogues. Older files' word examples become sentences (in the store).
+ */
+const VERSION = 3;
 
-export function exportWords(words: Word[]): void {
-  const data = { format: FORMAT, version: VERSION, exportedAt: new Date().toISOString(), words };
+export interface ExportData {
+  words: Word[];
+  sentences: Sentence[];
+  dialogues: Dialogue[];
+}
+
+export function exportData({ words, sentences, dialogues }: ExportData): void {
+  const data = { format: FORMAT, version: VERSION, exportedAt: new Date().toISOString(), words, sentences, dialogues };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -25,7 +34,7 @@ export function exportWords(words: Word[]): void {
  * Parse an export file. Accepts either `{ words: [...] }` or a bare array.
  * Entries only need `hanzi` and `meaning`; everything else is filled in.
  */
-export function parseImport(text: string): { words: Word[]; invalid: number } {
+export function parseImport(text: string): ExportData & { invalid: number; hasSentences: boolean } {
   let data: unknown;
   try {
     data = JSON.parse(text);
@@ -44,7 +53,55 @@ export function parseImport(text: string): { words: Word[]; invalid: number } {
     if (w) words.push(w);
     else invalid++;
   }
-  return { words, invalid };
+  const obj = (Array.isArray(data) ? {} : data) as { sentences?: unknown; dialogues?: unknown };
+  const sentences = (Array.isArray(obj.sentences) ? obj.sentences : [])
+    .map((raw, i) => normalizeSentence(raw, now + i))
+    .filter((x): x is Sentence => !!x);
+  const ids = new Set(sentences.map((x) => x.id));
+  const dialogues = (Array.isArray(obj.dialogues) ? obj.dialogues : [])
+    .map((raw, i) => normalizeDialogue(raw, now + i, ids))
+    .filter((x): x is Dialogue => !!x);
+  return { words, sentences, dialogues, invalid, hasSentences: Array.isArray(obj.sentences) };
+}
+
+/** A sentence from a file or another device (needs Chinese text; a missing translation stays empty). */
+export function normalizeSentence(raw: unknown, fallbackTime: number = Date.now()): Sentence | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  const zh = str(r.zh);
+  if (!zh) return null;
+  const ids = Array.isArray(r.wordIds) ? r.wordIds.filter((x): x is string => typeof x === 'string') : [];
+  return {
+    id: str(r.id) || newId(),
+    zh,
+    pinyin: str(r.pinyin) || toPinyin(zh),
+    translation: str(r.translation),
+    tags: normalizeTags(Array.isArray(r.tags) ? r.tags.filter((t): t is string => typeof t === 'string') : []),
+    notes: str(r.notes) || undefined,
+    dialogueId: str(r.dialogueId) || undefined,
+    wordIds: ids.length ? ids : undefined,
+    tatoebaId: typeof r.tatoebaId === 'number' ? r.tatoebaId : undefined,
+    createdAt: num(r.createdAt, fallbackTime),
+    updatedAt: num(r.updatedAt, fallbackTime),
+  };
+}
+
+/** A dialogue; lines pointing at sentences that aren't in the file are dropped. */
+export function normalizeDialogue(raw: unknown, fallbackTime: number = Date.now(), sentenceIds?: Set<string>): Dialogue | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  const lines = (Array.isArray(r.lines) ? r.lines : [])
+    .map((l) => (l && typeof l === 'object' ? (l as Record<string, unknown>) : null))
+    .filter((l): l is Record<string, unknown> => !!l && !!str(l.sentenceId) && (!sentenceIds || sentenceIds.has(str(l.sentenceId))))
+    .map((l) => ({ sentenceId: str(l.sentenceId), speaker: str(l.speaker) || undefined }));
+  return {
+    id: str(r.id) || newId(),
+    title: str(r.title) || 'Dialogue',
+    tags: normalizeTags(Array.isArray(r.tags) ? r.tags.filter((t): t is string => typeof t === 'string') : []),
+    lines,
+    createdAt: num(r.createdAt, fallbackTime),
+    updatedAt: num(r.updatedAt, fallbackTime),
+  };
 }
 
 const str = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');

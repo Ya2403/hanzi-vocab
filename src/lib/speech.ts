@@ -36,3 +36,26 @@ export function speak(text: string): void {
   u.rate = getSettings().speechRate;
   speechSynthesis.speak(u);
 }
+
+/** Read several texts one after another (e.g. a whole dialogue); `onEnd` runs after the last. */
+export function speakAll(texts: string[], onEnd?: () => void): void {
+  const list = texts.filter((t) => t.trim());
+  if (!speechSupported || !list.length) return onEnd?.();
+  speechSynthesis.cancel();
+  const voice = pickVoice();
+  list.forEach((text, i) => {
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'zh-CN';
+    if (voice) u.voice = voice;
+    u.rate = getSettings().speechRate;
+    if (i === list.length - 1 && onEnd) {
+      u.onend = () => onEnd();
+      u.onerror = () => onEnd();
+    }
+    speechSynthesis.speak(u);
+  });
+}
+
+export function stopSpeaking(): void {
+  if (speechSupported) speechSynthesis.cancel();
+}

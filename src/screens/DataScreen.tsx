@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { useStore, type ImportMode } from '../store';
 import { today } from '../lib/date';
-import { exportWords, parseImport } from '../lib/io';
+import { exportData, parseImport } from '../lib/io';
 import { isDueLearned, isLearned, isLeech, isNew, LEECH_FILTER } from '../lib/srs';
 import { strength } from '../lib/planner';
 import { liveStreak } from '../lib/streak';
@@ -20,7 +20,7 @@ import { TatoebaBulk } from '../components/Sentences';
 import { corpusCached, loadCorpus } from '../lib/tatoeba';
 
 export function DataScreen() {
-  const { words, streak, importWords } = useStore();
+  const { words, sentences, dialogues, links, streak, importData } = useStore();
   const settings = useSettings();
   const fileRef = useRef<HTMLInputElement>(null);
   const [importMode, setImportMode] = useState<ImportMode>('merge');
@@ -29,7 +29,7 @@ export function DataScreen() {
   const [bulk, setBulk] = useState(false);
   const [tatoebaBulk, setTatoebaBulk] = useState(false);
   const [tonePractice, setTonePractice] = useState<Word[] | null>(null);
-  const withoutExample = words.filter((w) => !w.example).length;
+  const withoutExample = words.filter((w) => !links.byWord.get(w.id)?.length).length;
 
   useEffect(() => onVoicesChanged(() => setVoiceOk(hasChineseVoice())), []);
 
@@ -43,17 +43,19 @@ export function DataScreen() {
     e.target.value = '';
     if (!file) return;
     try {
-      const { words: incoming, invalid } = parseImport(await file.text());
+      const data = parseImport(await file.text());
+      const { words: incoming, invalid } = data;
       if (!incoming.length) throw new Error('The file contains no valid words.');
       if (
         importMode === 'replace' &&
         !confirm(
-          `Replace all ${words.length} existing words with the ${incoming.length} words from “${file.name}”? Words not in the file are deleted (on all your synced devices too). This cannot be undone.`,
+          `Replace all ${words.length} existing words${sentences.length ? ` and ${sentences.length} sentences` : ''} with the ${incoming.length} words${data.sentences.length ? ` and ${data.sentences.length} sentences` : ''} from “${file.name}”? Everything not in the file is deleted (on all your synced devices too). This cannot be undone.`,
         )
       )
         return;
-      const { added, skipped } = await importWords(incoming, importMode);
+      const { added, skipped, sentences: addedSentences } = await importData(data, importMode);
       const parts = [`Imported ${added} word${added === 1 ? '' : 's'}`];
+      if (addedSentences) parts.push(`${addedSentences} sentence${addedSentences === 1 ? '' : 's'}`);
       if (skipped) parts.push(`skipped ${skipped} already in your list`);
       if (invalid) parts.push(`ignored ${invalid} invalid entr${invalid === 1 ? 'y' : 'ies'}`);
       setMessage({ kind: 'ok', text: parts.join(', ') + '.' });
@@ -98,8 +100,8 @@ export function DataScreen() {
       <div className="card form">
         <h2>Backup</h2>
         <p className="muted small">Your words live only in this browser. Export regularly to keep a backup or move to another device.</p>
-        <button className="btn block" onClick={() => exportWords(words)} disabled={!words.length}>
-          Export {words.length} words as JSON
+        <button className="btn block" onClick={() => exportData({ words, sentences, dialogues })} disabled={!words.length && !sentences.length}>
+          Export {words.length} words{sentences.length ? ` and ${sentences.length} sentences` : ''} as JSON
         </button>
         <Segmented
           label="Import mode"

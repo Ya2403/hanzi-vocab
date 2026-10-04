@@ -12,18 +12,18 @@ import { Icon } from './Icon';
 import { FindSentences } from './Sentences';
 
 export function WordForm({ word, onClose }: { word?: Word; onClose(): void }) {
-  const { words, addWord, updateWord } = useStore();
+  const { words, links, addWord, updateWord, addSentences } = useStore();
   const [hanzi, setHanzi] = useState(word?.hanzi ?? '');
   const [pinyin, setPinyin] = useState(word?.pinyin ?? '');
   // Keep pinyin in sync with hanzi until the user types their own.
   const [pinyinAuto, setPinyinAuto] = useState(!word || word.pinyin === toPinyin(word.hanzi));
   const [meaning, setMeaning] = useState(word?.meaning ?? '');
-  const [example, setExample] = useState(word?.example ?? '');
+  // A new example sentence, saved as a Sentence linked to this word.
+  const [example, setExample] = useState('');
+  const [exampleTranslation, setExampleTranslation] = useState('');
   // Set when the example came from Tatoeba; dropped as soon as the text is edited by hand.
-  const [exampleSource, setExampleSource] = useState<{ translation?: string; ref?: number }>({
-    translation: word?.exampleTranslation,
-    ref: word?.exampleRef,
-  });
+  const [exampleRef, setExampleRef] = useState<number | undefined>(undefined);
+  const linkedSentences = (word && links.byWord.get(word.id)) ?? [];
   const [finding, setFinding] = useState(false);
   const [notes, setNotes] = useState(word?.notes ?? '');
   // The stored version (progress may change while the dialog is open).
@@ -75,15 +75,16 @@ export function WordForm({ word, onClose }: { word?: Word; onClose(): void }) {
         hanzi,
         pinyin: pinyin.trim() || toPinyin(hanzi),
         meaning,
-        example,
-        exampleTranslation: exampleSource.translation,
-        exampleRef: exampleSource.ref,
         notes,
         tags,
       };
       // Merge onto the stored word so progress changes made in this dialog aren't overwritten.
+      let saved = word;
       if (word) await updateWord({ ...(live ?? word), ...input });
-      else await addWord(input);
+      else saved = await addWord(input);
+      if (saved && example.trim() && !linkedSentences.some((x) => x.zh === example.trim())) {
+        await addSentences([{ zh: example, pinyin: '', translation: exampleTranslation, tags, wordIds: [saved.id], tatoebaId: exampleRef }]);
+      }
       onClose();
     } catch (err) {
       console.error(err);
@@ -129,36 +130,59 @@ export function WordForm({ word, onClose }: { word?: Word; onClose(): void }) {
           <input className="input" value={meaning} onChange={(e) => setMeaning(e.target.value)} placeholder="Chinese character" required />
         </label>
 
-        <label className="field">
+        <div className="field">
           <span className="field-label">
-            Example sentence <span className="optional">optional</span>
+            Example sentences <span className="optional">optional</span>
           </span>
+          {linkedSentences.length > 0 && (
+            <ul className="linked-sentences small">
+              {linkedSentences.slice(0, 5).map((x) => (
+                <li key={x.id}>
+                  <span lang="zh-CN">{x.zh}</span>{' '}
+                  {x.translation ? <span className="muted">{x.translation}</span> : <span className="status needs">needs translation</span>}
+                </li>
+              ))}
+              {linkedSentences.length > 5 && <li className="muted">…and {linkedSentences.length - 5} more (Words → Sentences)</li>}
+            </ul>
+          )}
           <textarea
             className="input"
             rows={2}
             value={example}
             onChange={(e) => {
               setExample(e.target.value);
-              setExampleSource({});
+              setExampleRef(undefined);
             }}
             lang="zh-CN"
-            placeholder="我在学汉字。"
+            placeholder={linkedSentences.length ? 'Add another sentence…' : '我在学汉字。'}
+            aria-label="New example sentence"
           />
-          {example.trim() && <span className="hint">{toPinyin(example)}</span>}
-          {exampleSource.translation && <span className="hint">{exampleSource.translation}</span>}
+          {example.trim() && (
+            <>
+              <span className="hint">{toPinyin(example)}</span>
+              <input
+                className="input"
+                value={exampleTranslation}
+                onChange={(e) => setExampleTranslation(e.target.value)}
+                placeholder="English translation (optional; can be filled in later)"
+                aria-label="Translation of the new sentence"
+              />
+            </>
+          )}
           {!finding && (
             <button type="button" className="link-btn align-start" onClick={() => setFinding(true)} disabled={!hanzi.trim()}>
               Find sentences
             </button>
           )}
-        </label>
+        </div>
         {finding && (
           <FindSentences
             hanzi={hanzi}
             onClose={() => setFinding(false)}
             onPick={(m) => {
               setExample(m.sentence.zh);
-              setExampleSource({ translation: m.sentence.en, ref: m.sentence.zhId });
+              setExampleTranslation(m.sentence.en);
+              setExampleRef(m.sentence.zhId);
               setFinding(false);
             }}
           />

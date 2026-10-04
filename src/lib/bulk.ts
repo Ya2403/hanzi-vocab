@@ -2,7 +2,7 @@ import { convert } from 'pinyin-pro';
 import { parseImport } from './io';
 import { normalizeSearch, toPinyin } from './pinyin';
 import { parseTagText } from './words';
-import type { WordInput } from './types';
+import type { NewWord } from './types';
 
 /**
  * Prompt for ChatGPT/Claude/etc. The app parses exactly this format, and is lenient
@@ -29,7 +29,7 @@ Example output:
 
 export interface BulkRow {
   line: number;
-  word: WordInput;
+  word: NewWord;
 }
 
 export interface BulkError {
@@ -87,7 +87,7 @@ function fromJson(text: string): BulkResult {
 }
 
 /** A word, an error message, or null for lines to skip silently (headers). */
-function parseLine(line: string): WordInput | string | null {
+function parseLine(line: string): NewWord | string | null {
   let cells: string[];
   if (line.includes('|')) cells = line.replace(/^\|/, '').replace(/\|$/, '').split('|');
   else if (line.includes('\t')) cells = line.split('\t');

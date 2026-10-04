@@ -9,7 +9,7 @@ import { shuffle } from '../lib/words';
 import type { Word } from '../lib/types';
 import { Icon } from './Icon';
 import { SpeakButton } from './SpeakButton';
-import { ExampleSentence, NotesBox } from './WordExtras';
+import { NotesBox, WordExamples } from './WordExtras';
 
 export type StepExercise = 'choice' | 'typing';
 
@@ -173,7 +173,7 @@ export function TwoStepCard({ word, pool, pinyinEx, onDone }: Props) {
               <SpeakButton text={word.hanzi} />
             </div>
             <NotesBox notes={word.notes} />
-            {word.example && <ExampleSentence text={word.example} pinyinVisible translation={word.exampleTranslation} tatoebaId={word.exampleRef} />}
+            <WordExamples word={word} pinyinVisible />
           </div>
         )}
       </div>

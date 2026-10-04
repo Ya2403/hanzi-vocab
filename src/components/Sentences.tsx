@@ -99,25 +99,25 @@ export function FindSentences({
 
 /** Bulk action: give every word without an example its best-ranked Tatoeba sentence. */
 export function TatoebaBulk({ onClose }: { onClose(): void }) {
-  const { words, updateWords } = useStore();
+  const { words, links, addSentences } = useStore();
   const { status, corpus, retry } = useCorpus(true);
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
 
-  const candidates = useMemo(() => words.filter((w) => !w.example), [words]);
+  const candidates = useMemo(() => words.filter((w) => !links.byWord.get(w.id)?.length), [words, links]);
   const plan = useMemo(() => (corpus ? planBulk(corpus, candidates, words) : null), [corpus, candidates, words]);
   const chosen = plan ? plan.found.filter((f) => !excluded.has(f.word.id)) : [];
 
   const apply = async () => {
     setSaving(true);
-    await updateWords(
-      chosen.map(({ word, match }) => ({
-        ...word,
-        example: match.sentence.zh,
-        exampleTranslation: match.sentence.en,
-        exampleRef: match.sentence.zhId,
-      })),
-    );
+    // Each becomes a Sentence linked to its word (same text for two words: one sentence, both linked).
+    const byZh = new Map<string, { zh: string; translation: string; tatoebaId: number; wordIds: string[]; tags: string[] }>();
+    for (const { word, match } of chosen) {
+      const cur = byZh.get(match.sentence.zh);
+      if (cur) cur.wordIds.push(word.id);
+      else byZh.set(match.sentence.zh, { zh: match.sentence.zh, translation: match.sentence.en, tatoebaId: match.sentence.zhId, wordIds: [word.id], tags: word.tags });
+    }
+    await addSentences([...byZh.values()].map((x) => ({ ...x, pinyin: '' })));
     onClose();
   };
 

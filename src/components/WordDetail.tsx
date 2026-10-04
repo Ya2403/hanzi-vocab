@@ -9,7 +9,7 @@ import { Breakdown } from './Breakdown';
 import { Icon } from './Icon';
 import { Modal } from './Modal';
 import { SpeakButton } from './SpeakButton';
-import { ExampleSentence, LeechBadge, NotesBox } from './WordExtras';
+import { LeechBadge, NotesBox, WordExamples } from './WordExtras';
 
 export function WordDetail({ word: initial, onClose, onEdit }: { word: Word; onClose(): void; onEdit(w: Word): void }) {
   const { words, deleteWord } = useStore();
@@ -64,9 +64,7 @@ export function WordDetail({ word: initial, onClose, onEdit }: { word: Word; onC
         <div className="detail-meaning">{word.meaning}</div>
         <NotesBox notes={word.notes} />
 
-        {word.example && (
-          <ExampleSentence text={word.example} pinyinVisible={listPinyin} translation={word.exampleTranslation} tatoebaId={word.exampleRef} />
-        )}
+        <WordExamples word={word} pinyinVisible={listPinyin} max={3} />
 
         {word.tags.length > 0 && (
           <div className="word-meta">

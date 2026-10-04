@@ -1,7 +1,7 @@
-import type { WordInput } from './types';
+import type { NewWord } from './types';
 
 /** A starter set so a new user can try the app immediately. Pinyin is generated on load. */
-export const sampleWords: Omit<WordInput, 'pinyin'>[] = [
+export const sampleWords: Omit<NewWord, 'pinyin'>[] = [
   { hanzi: '你好', meaning: 'hello', example: '你好，我叫小明。', tags: ['HSK1', 'greetings'] },
   { hanzi: '谢谢', meaning: 'thank you', example: '谢谢你的帮助。', tags: ['HSK1', 'greetings'] },
   { hanzi: '再见', meaning: 'goodbye', tags: ['HSK1', 'greetings'] },

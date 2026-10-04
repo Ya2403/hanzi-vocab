@@ -1,5 +1,6 @@
 import { SKILL_LABEL } from '../lib/srs';
-import type { Skill } from '../lib/types';
+import type { Sentence, Skill, Word } from '../lib/types';
+import { useStore } from '../store';
 import { useState, type MouseEvent } from 'react';
 import { toPinyin } from '../lib/pinyin';
 import { tatoebaUrl } from '../lib/tatoeba';
@@ -14,8 +15,11 @@ export function ExampleSentence({
   pinyinVisible,
   translation,
   tatoebaId,
+  pinyin,
 }: {
   text: string;
+  /** The sentence's own pinyin (else generated). */
+  pinyin?: string;
   pinyinVisible: boolean;
   translation?: string;
   /** Tatoeba sentence id: shown as a small attribution link. */
@@ -32,10 +36,30 @@ export function ExampleSentence({
       <div lang="zh-CN" className={show ? undefined : 'can-reveal'} onClick={show ? undefined : reveal} title={show ? undefined : 'Tap to show pinyin'}>
         {text} <SpeakButton text={text} size={16} label="Play example" />
       </div>
-      {show ? <div className="muted small">{toPinyin(text)}</div> : <div className="reveal-hint">tap the sentence for pinyin</div>}
+      {show ? <div className="muted small">{pinyin || toPinyin(text)}</div> : <div className="reveal-hint">tap the sentence for pinyin</div>}
       {translation && <div className="small example-translation">{translation}</div>}
       {tatoebaId ? <TatoebaCredit id={tatoebaId} /> : null}
     </div>
+  );
+}
+
+/** Sentences a word appears in: ones linked to it by hand first, then the shortest. */
+export function useWordSentences(word: Word): Sentence[] {
+  const { links } = useStore();
+  const list = links.byWord.get(word.id) ?? [];
+  const pinned = (s: Sentence) => (s.wordIds?.includes(word.id) ? 0 : 1);
+  return [...list].sort((a, b) => pinned(a) - pinned(b) || a.zh.length - b.zh.length);
+}
+
+/** A word's example sentences (its linked Sentences), with translations when they have one. */
+export function WordExamples({ word, pinyinVisible, max = 1 }: { word: Word; pinyinVisible: boolean; max?: number }) {
+  const list = useWordSentences(word).slice(0, max);
+  return (
+    <>
+      {list.map((s) => (
+        <ExampleSentence key={s.id} text={s.zh} pinyin={s.pinyin} pinyinVisible={pinyinVisible} translation={s.translation || undefined} tatoebaId={s.tatoebaId} />
+      ))}
+    </>
   );
 }
 

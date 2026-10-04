@@ -5,7 +5,7 @@ import { usePinyinVisibility, useSettings } from '../lib/settings';
 import type { CardDirection, Skill, Word } from '../lib/types';
 import { SpeakButton } from './SpeakButton';
 import { Breakdown } from './Breakdown';
-import { ExampleSentence, NotesBox } from './WordExtras';
+import { WordExamples, NotesBox } from './WordExtras';
 
 interface Props {
   word: Word;
@@ -123,9 +123,7 @@ export function Flashcard({ word, direction, skills, onAnswer }: Props) {
             </div>
             {direction !== 'en-zh' && <div className="answer-meaning">{word.meaning}</div>}
             <NotesBox notes={word.notes} />
-            {word.example && (
-              <ExampleSentence text={word.example} pinyinVisible={pv.question} translation={word.exampleTranslation} tatoebaId={word.exampleRef} />
-            )}
+            <WordExamples word={word} pinyinVisible={pv.question} />
             <Breakdown word={word} collapsible pinyinVisible={pinyinShown} />
           </div>
         ) : (
