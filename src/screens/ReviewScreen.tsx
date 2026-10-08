@@ -6,7 +6,10 @@ import { pickPractice, reviewCount as countCards } from '../lib/planner';
 import { isDueLearned, isLearned, isNew, nextDue } from '../lib/srs';
 import { liveStreak } from '../lib/streak';
 import { updateSettings, useSettings } from '../lib/settings';
-import type { Word } from '../lib/types';
+import type { Sentence, Word } from '../lib/types';
+import { isSentenceLearned, learnGroups, nextReadyGroup, sentencesLearnedToday } from '../lib/sentenceLearn';
+import { isSentenceDue, pickSentencePractice, practiceSplit, sentenceNextDue, sentenceReviewCount } from '../lib/sentenceReview';
+import { LearnSentenceSession } from '../components/LearnSentenceSession';
 import { Session } from '../components/Session';
 import { LearnSession } from '../components/LearnSession';
 import { modeAvailable, SessionOptions } from '../components/SessionOptions';
@@ -15,17 +18,19 @@ import { tagLabel, wordsInTags } from '../components/TagPicker';
 
 type Flow =
   | { phase: 'home' }
-  | { phase: 'review'; words: Word[]; title: string; chain: boolean }
+  | { phase: 'review'; words: Word[]; sentences: Sentence[]; title: string; chain: boolean }
   | { phase: 'learn' }
+  | { phase: 'learnSentences' }
   | { phase: 'done' }
-  | { phase: 'practice'; words: Word[] };
+  | { phase: 'practice'; words: Word[]; sentences: Sentence[] };
 
 /**
- * Home of the app. "Continue" runs everything due today in order — reviews, then new words
- * (up to the daily limit), then "Done for today" with an optional extra practice round.
+ * Home of the app. "Continue" runs everything due today in order: reviews (words, then
+ * sentences), new words (up to the daily limit), new sentences (a ready dialogue or group),
+ * then "Done for today" with an optional extra practice round.
  */
 export function ReviewScreen({ onGoToWords, onGoToLearn }: { onGoToWords(): void; onGoToLearn(): void }) {
-  const { words, streak, daily } = useStore();
+  const { words, sentences, dialogues, links, streak, daily } = useStore();
   const settings = useSettings();
   const [flow, setFlow] = useState<Flow>({ phase: 'home' });
   const [tags, setTags] = useState<string[]>([]);
@@ -36,30 +41,52 @@ export function ReviewScreen({ onGoToWords, onGoToLearn }: { onGoToWords(): void
   const newLeft = Math.min(newWords.length, Math.max(0, settings.learnDailyLimit - learnedToday(words, on)));
   const learnedWords = words.filter(isLearned);
   const filteredDue = wordsInTags(allDue, tags);
-  // Review cards: meaning + pinyin share one, recall and writing get their own.
-  const reviewCount = useMemo(() => countCards(allDue, on), [allDue, on]); // allDue already reflects writingPractice
-  const filteredCount = countCards(filteredDue, on);
+  const dueSentences = useMemo(() => sentences.filter((x) => isSentenceDue(x, on)), [sentences, on]);
+  const filteredSentences = tags.length ? dueSentences.filter((x) => x.tags.some((t) => tags.includes(t))) : dueSentences;
+  const sentenceCards = sentenceReviewCount(dueSentences, on);
+  const learnedSentences = sentences.filter(isSentenceLearned);
+  // The next new sentences to learn (a ready dialogue or group that fits today's limit).
+  const sentencePlan = useMemo(
+    () =>
+      nextReadyGroup(
+        learnGroups(sentences, dialogues),
+        links,
+        settings.sentenceReadyPercent,
+        settings.sentenceDailyLimit - sentencesLearnedToday(sentences, on),
+        sentencesLearnedToday(sentences, on),
+      ),
+    [sentences, dialogues, links, settings.sentenceReadyPercent, settings.sentenceDailyLimit, on],
+  );
+  const newSentences = sentencePlan?.sentences.filter((x) => !isSentenceLearned(x)).length ?? 0;
   const reviewedToday = daily.date === on ? daily.reviews : 0;
+  // Review cards: meaning + pinyin share one, recall and writing get their own.
+  const reviewCount = useMemo(() => countCards(allDue, on), [allDue, on]) + sentenceCards; // allDue already reflects writingPractice
+  const filteredCount = countCards(filteredDue, on) + sentenceReviewCount(filteredSentences, on);
   const mode = settings.autoExercise ? 'auto' : settings.reviewMode;
 
   const nextUp = useMemo(() => {
-    const upcoming = words
-      .filter((w) => isLearned(w) && !isDueLearned(w, on))
-      .map((w) => nextDue(w, on)!)
-      .sort();
+    const upcoming = [
+      ...words.filter((w) => isLearned(w) && !isDueLearned(w, on)).map((w) => nextDue(w, on)!),
+      ...sentences.filter((x) => isSentenceLearned(x) && !isSentenceDue(x, on)).map((x) => sentenceNextDue(x, on)!),
+    ].sort();
     if (!upcoming.length) return null;
     return { date: upcoming[0], count: upcoming.filter((d) => d === upcoming[0]).length };
-  }, [words, on, settings.writingPractice]);
+  }, [words, sentences, on, settings.writingPractice]);
 
   const home = () => setFlow({ phase: 'home' });
-  /** After reviews: new words (if any left today), else done. */
-  const afterReviews = () => setFlow(newLeft > 0 ? { phase: 'learn' } : { phase: 'done' });
-  const practiceMore = () => setFlow({ phase: 'practice', words: pickPractice(learnedWords, settings.practiceSize) });
+  /** After new words: new sentences (if a group is ready), else done. */
+  const afterWords = () => setFlow(sentencePlan ? { phase: 'learnSentences' } : { phase: 'done' });
+  /** After reviews: new words (if any left today), then sentences, else done. */
+  const afterReviews = () => (newLeft > 0 ? setFlow({ phase: 'learn' }) : afterWords());
+  const split = practiceSplit(settings.practiceSize, learnedWords.length, learnedSentences.length, settings.practiceSentences);
+  const practiceMore = () =>
+    setFlow({ phase: 'practice', words: pickPractice(learnedWords, split.words), sentences: pickSentencePractice(learnedSentences, split.sentences) });
 
   const continueFlow = () => {
-    if (allDue.length) setFlow({ phase: 'review', words: allDue, title: 'Reviews', chain: true });
+    if (allDue.length || dueSentences.length) setFlow({ phase: 'review', words: allDue, sentences: dueSentences, title: 'Reviews', chain: true });
     else afterReviews();
   };
+  const nextLabel = newLeft > 0 ? `Continue: ${newLeft} new word${newLeft === 1 ? '' : 's'}` : sentencePlan ? `Continue: ${sentencePlan.group.title}` : 'Continue';
 
   // ---------- Running phases ----------
 
@@ -68,12 +95,13 @@ export function ReviewScreen({ onGoToWords, onGoToLearn }: { onGoToWords(): void
       <Session
         title={flow.title}
         words={flow.words}
+        sentences={flow.sentences}
         mode={mode}
         direction={settings.reviewDirection}
         updateSchedule
         onExit={home}
         onFinish={flow.chain ? afterReviews : home}
-        finishLabel={flow.chain ? (newLeft > 0 ? `Continue: ${newLeft} new word${newLeft === 1 ? '' : 's'}` : 'Continue') : 'Done'}
+        finishLabel={flow.chain ? nextLabel : 'Done'}
       />
     );
   }
@@ -82,6 +110,23 @@ export function ReviewScreen({ onGoToWords, onGoToLearn }: { onGoToWords(): void
       <LearnSession
         pool={newWords}
         title="New words"
+        onExit={home}
+        onFinish={afterWords}
+        finishLabel={sentencePlan ? `Continue: ${sentencePlan.group.title}` : 'Continue'}
+      />
+    );
+  }
+  if (flow.phase === 'learnSentences') {
+    if (!sentencePlan) {
+      setFlow({ phase: 'done' });
+      return null;
+    }
+    const g = sentencePlan.group;
+    return (
+      <LearnSentenceSession
+        title={g.title}
+        lines={sentencePlan.sentences.map((x) => ({ sentence: x, speaker: g.speakers.get(x.id) }))}
+        isDialogue={sentencePlan.isDialogue}
         onExit={home}
         onFinish={() => setFlow({ phase: 'done' })}
         finishLabel="Continue"
@@ -93,6 +138,7 @@ export function ReviewScreen({ onGoToWords, onGoToLearn }: { onGoToWords(): void
       <Session
         title="Practice more"
         words={flow.words}
+        sentences={flow.sentences}
         mode={settings.autoExercise ? 'auto' : settings.practiceMode}
         direction={settings.practiceDirection}
         updateSchedule={false}
@@ -111,14 +157,14 @@ export function ReviewScreen({ onGoToWords, onGoToLearn }: { onGoToWords(): void
             {nextUp && ` · next reviews ${formatDate(nextUp.date)}`}
           </p>
           <div className="row center">
-            <button className="btn primary" onClick={practiceMore} disabled={!learnedWords.length} autoFocus>
-              Practice more ({Math.min(settings.practiceSize, learnedWords.length)})
+            <button className="btn primary" onClick={practiceMore} disabled={!split.words && !split.sentences} autoFocus>
+              Practice more ({split.words + split.sentences})
             </button>
             <button className="btn" onClick={home}>
               Back
             </button>
           </div>
-          <p className="hint">Practice more picks your weakest words. It doesn’t change their schedule, except that a miss brings a review forward.</p>
+          <p className="hint">Practice more picks your weakest words and sentences. It doesn’t change their schedule, except that a miss brings a review forward.</p>
         </div>
       </section>
     );
@@ -126,7 +172,7 @@ export function ReviewScreen({ onGoToWords, onGoToLearn }: { onGoToWords(): void
 
   // ---------- Home ----------
 
-  const nothingLeft = !allDue.length && newLeft === 0;
+  const nothingLeft = !allDue.length && !dueSentences.length && newLeft === 0 && !sentencePlan;
 
   return (
     <section className="screen">
@@ -142,7 +188,14 @@ export function ReviewScreen({ onGoToWords, onGoToLearn }: { onGoToWords(): void
         ) : (
           <>
             <p className="continue-summary">
-              <b>{reviewCount}</b> review{reviewCount === 1 ? '' : 's'} · <b>{newLeft}</b> new word{newLeft === 1 ? '' : 's'} left today
+              <b>{reviewCount}</b> review{reviewCount === 1 ? '' : 's'} · <b>{newLeft}</b> new word{newLeft === 1 ? '' : 's'}
+              {newSentences > 0 && (
+                <>
+                  {' '}
+                  · <b>{newSentences}</b> new sentence{newSentences === 1 ? '' : 's'}
+                </>
+              )}{' '}
+              left today
             </p>
             <button className="btn primary continue-btn" onClick={nothingLeft ? () => setFlow({ phase: 'done' }) : continueFlow}>
               {nothingLeft ? 'All done for today ✓' : 'Continue'}
@@ -183,17 +236,22 @@ export function ReviewScreen({ onGoToWords, onGoToLearn }: { onGoToWords(): void
             <TagFilter words={words} selected={tags} onChange={setTags} showDue />
             <button
               className="btn block"
-              disabled={!filteredDue.length || (!settings.autoExercise && !modeAvailable(settings.reviewMode, words.length))}
+              disabled={(!filteredDue.length && !filteredSentences.length) || (!settings.autoExercise && !modeAvailable(settings.reviewMode, words.length))}
               onClick={() =>
                 setFlow({
                   phase: 'review',
                   words: filteredDue,
+                  sentences: filteredSentences,
                   title: tags.length ? `Review · ${tags.map(tagLabel).join(', ')}` : 'Reviews',
                   chain: false,
                 })
               }
             >
-              {filteredDue.length ? `Review ${filteredCount} due (${filteredDue.length} word${filteredDue.length === 1 ? '' : 's'})` : tags.length ? 'Nothing due in this selection' : 'Nothing due'}
+              {filteredCount
+                ? `Review ${filteredCount} due (${[filteredDue.length && `${filteredDue.length} word${filteredDue.length === 1 ? '' : 's'}`, filteredSentences.length && `${filteredSentences.length} sentence${filteredSentences.length === 1 ? '' : 's'}`].filter(Boolean).join(', ')})`
+                : tags.length
+                  ? 'Nothing due in this selection'
+                  : 'Nothing due'}
             </button>
           </div>
           <div className="setup-col">

@@ -166,37 +166,3 @@ function coveredBy(seg: string, known: Set<string>): boolean {
   };
   return chars.length > 1 && from(0);
 }
-
-// ---------- Rotation (Sentence practice) ----------
-
-const RECENT_KEY = 'hanzi-vocab:recentSentences';
-const RECENT_PER_WORD = 3;
-
-function readRecent(): Record<string, string[]> {
-  try {
-    return JSON.parse(localStorage.getItem(RECENT_KEY) ?? '{}');
-  } catch {
-    return {};
-  }
-}
-
-/**
- * Choose from candidates (already in preference order), skipping the ones shown most
- * recently for this word so the same sentence doesn't come up every time. Falls back to
- * the least recently shown one when every candidate was used lately.
- */
-export function pickRotating<T extends { key: string }>(wordId: string, candidates: T[]): T | null {
-  if (!candidates.length) return null;
-  const all = readRecent();
-  const recent = all[wordId] ?? [];
-  const fresh = candidates.find((c) => !recent.includes(c.key));
-  // `recent` is newest first, so the least recently shown candidate has the highest index.
-  const choice = fresh ?? [...candidates].sort((a, b) => recent.indexOf(b.key) - recent.indexOf(a.key))[0];
-  all[wordId] = [choice.key, ...recent.filter((k) => k !== choice.key)].slice(0, RECENT_PER_WORD);
-  try {
-    localStorage.setItem(RECENT_KEY, JSON.stringify(all));
-  } catch {
-    /* rotation is best-effort */
-  }
-  return choice;
-}

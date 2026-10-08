@@ -9,7 +9,7 @@ import { usePinyinVisibility } from '../lib/settings';
 import { speak, speakAll, speechSupported, stopSpeaking } from '../lib/speech';
 import { Grade } from '../lib/srs';
 import { writableChars } from '../lib/strokes';
-import type { Sentence } from '../lib/types';
+import type { Sentence, Word } from '../lib/types';
 import { Icon } from './Icon';
 import { SpeakButton } from './SpeakButton';
 
@@ -141,12 +141,15 @@ export function TranslationChoice({
   audioOnly = false,
   kicker,
   onAnswer,
+  onCantListen,
 }: {
   sentence: Sentence;
   options: string[];
   audioOnly?: boolean;
   kicker?: string;
   onAnswer(q: number): void;
+  /** Listening card: "Can't listen now" skips it ungraded. */
+  onCantListen?(): void;
 }) {
   const [picked, setPicked] = useState<number | null>(null);
   const pv = usePinyinVisibility();
@@ -187,6 +190,69 @@ export function TranslationChoice({
             <button key={i} className={`option ${state}`} onClick={() => pick(i)} disabled={answered && state === 'dim'}>
               <span className="option-key">{i + 1}</span>
               <span className="option-text">{o}</span>
+              {state === 'correct' && <Icon name="check" />}
+              {state === 'wrong' && <Icon name="x" />}
+            </button>
+          );
+        })}
+      </div>
+      {audioOnly && !answered && onCantListen && (
+        <button className="btn ghost cant-listen" onClick={onCantListen}>
+          <Icon name="headphonesOff" size={18} /> Can’t listen now
+        </button>
+      )}
+      {answered && <Feedback ok={correct} onNext={next} />}
+    </div>
+  );
+}
+
+// ---------- Fill the blank ----------
+
+/**
+ * The full English translation and the sentence with one learned word blanked: pick the word
+ * out of 4. Then the whole sentence is revealed with pinyin, translation and audio.
+ */
+export function ClozeChoice({ sentence: s, target, options, onAnswer }: { sentence: Sentence; target: Word; options: Word[]; onAnswer(q: number): void }) {
+  const pv = usePinyinVisibility();
+  const [picked, setPicked] = useState<number | null>(null);
+  const answered = picked !== null;
+  const correct = answered && options[picked].id === target.id;
+  const at = s.zh.indexOf(target.hanzi);
+  const pick = (i: number) => {
+    if (answered || !options[i]) return;
+    setPicked(i);
+    autoSpeak(s.zh);
+  };
+  const next = () => onAnswer(correct ? Grade.Good : Grade.Again);
+  useKeys(pick, answered ? next : null);
+
+  return (
+    <div className="practice sentence-practice">
+      <div className="card prompt-card">
+        <div className="card-kicker">Fill in the blank</div>
+        <div className="prompt-meaning cloze-translation">{s.translation}</div>
+        {answered ? (
+          <SentenceReveal sentence={s} />
+        ) : (
+          <div className="prompt-sentence cloze-sentence" lang="zh-CN">
+            {s.zh.slice(0, at)}
+            <span className="cloze-gap">{'＿'.repeat([...target.hanzi].length)}</span>
+            {s.zh.slice(at + target.hanzi.length)}
+          </div>
+        )}
+      </div>
+      <div className="options">
+        {options.map((o, i) => {
+          const state = !answered ? '' : o.id === target.id ? 'correct' : i === picked ? 'wrong' : 'dim';
+          return (
+            <button key={o.id} className={`option ${state}`} onClick={() => pick(i)} disabled={answered && state === 'dim'}>
+              <span className="option-key">{i + 1}</span>
+              <span className="option-text">
+                <span className="option-hanzi" lang="zh-CN">
+                  {o.hanzi}
+                </span>
+                {(answered || pv.question) && <span className="pinyin">{o.pinyin}</span>}
+              </span>
               {state === 'correct' && <Icon name="check" />}
               {state === 'wrong' && <Icon name="x" />}
             </button>

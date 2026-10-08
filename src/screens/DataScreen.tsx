@@ -13,6 +13,7 @@ import { Segmented } from '../components/Segmented';
 import { BulkAdd } from '../components/BulkAdd';
 import { SyncCard } from '../components/SyncCard';
 import { TraceOptions } from '../components/TraceOptions';
+import { SentenceStats } from '../components/SentenceStats';
 import { SkillStats } from '../components/SkillStats';
 import { Session } from '../components/Session';
 import type { Word } from '../lib/types';
@@ -94,6 +95,8 @@ export function DataScreen() {
       </div>
 
       <SkillStats words={words} onPracticeTones={setTonePractice} />
+
+      <SentenceStats />
 
       <SyncCard />
 

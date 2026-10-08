@@ -4,6 +4,7 @@ import { today } from './lib/date';
 import { useSettings } from './lib/settings';
 import { QuietBadge } from './components/QuietBadge';
 import { reviewCount } from './lib/planner';
+import { sentenceReviewCount } from './lib/sentenceReview';
 import { liveStreak } from './lib/streak';
 import { Icon, type IconName } from './components/Icon';
 import { WordsScreen } from './screens/WordsScreen';
@@ -27,7 +28,7 @@ const tabFromHash = (): Tab => {
 };
 
 export default function App() {
-  const { words, streak, error } = useStore();
+  const { words, streak, error, sentences } = useStore();
   const [tab, setTab] = useState<Tab>(tabFromHash);
 
   useEffect(() => {
@@ -46,7 +47,7 @@ export default function App() {
   useSettings();
   const on = today();
   // New words are taught in Learn, so they never count as due for Review.
-  const dueCount = reviewCount(words, on);
+  const dueCount = reviewCount(words, on) + sentenceReviewCount(sentences, on);
   const streakDays = liveStreak(streak, on);
   const doneToday = streak.lastDate === on;
 

@@ -3,7 +3,9 @@ import { useStore } from '../store';
 import { pickPractice } from '../lib/planner';
 import { updateSettings, useSettings } from '../lib/settings';
 import { isLearned } from '../lib/srs';
-import type { Word } from '../lib/types';
+import type { Sentence, Word } from '../lib/types';
+import { isSentenceLearned } from '../lib/sentenceLearn';
+import { pickSentencePractice, practiceSplit } from '../lib/sentenceReview';
 import { Session } from '../components/Session';
 import { modeAvailable, SessionOptions } from '../components/SessionOptions';
 import { Segmented } from '../components/Segmented';
@@ -11,30 +13,33 @@ import { TagFilter } from '../components/TagFilter';
 import { tagLabel, wordsInTags } from '../components/TagPicker';
 
 /**
- * Free practice on learned words, weakest first (recent misses, low accuracy, low ease, due
- * soon, not seen lately). Correct answers don't change the schedule; a miss brings the
- * word's review forward to tomorrow at the latest.
+ * Free practice on learned words (and sentences), weakest first (recent misses, low accuracy,
+ * low ease, due soon, not seen lately). Correct answers don't change the schedule; a miss brings
+ * the review forward to tomorrow at the latest.
  */
 export function PracticeScreen() {
-  const { words } = useStore();
+  const { words, sentences } = useStore();
   const settings = useSettings();
   // Categories can be preselected via a link like #practice?tag=HSK1 (from the word list).
   const [tags, setTags] = useState<string[]>(() => {
     const t = new URLSearchParams(location.hash.split('?')[1]).get('tag');
     return t ? [t] : [];
   });
-  const [session, setSession] = useState<Word[] | null>(null);
+  const [session, setSession] = useState<{ words: Word[]; sentences: Sentence[] } | null>(null);
 
   const learned = words.filter(isLearned);
   const pool = wordsInTags(learned, tags);
-  const size = Math.min(pool.length, settings.practiceSize);
+  const sentencePool = sentences.filter((s) => isSentenceLearned(s) && (!tags.length || s.tags.some((t) => tags.includes(t))));
+  const split = practiceSplit(settings.practiceSize, pool.length, sentencePool.length, settings.practiceSentences);
+  const size = split.words + split.sentences;
   const mode = settings.autoExercise ? 'auto' : settings.practiceMode;
 
   if (session) {
     return (
       <Session
         title={`Practice${tags.length ? ` · ${tags.map(tagLabel).join(', ')}` : ''}`}
-        words={session}
+        words={session.words}
+        sentences={session.sentences}
         mode={mode}
         direction={settings.practiceDirection}
         updateSchedule={false}
@@ -43,7 +48,7 @@ export function PracticeScreen() {
     );
   }
 
-  const canStart = size > 0 && (settings.autoExercise || modeAvailable(settings.practiceMode, words.length));
+  const canStart = size > 0 && (settings.autoExercise || !split.words || modeAvailable(settings.practiceMode, words.length));
 
   return (
     <section className="screen">
@@ -60,6 +65,15 @@ export function PracticeScreen() {
             <TagFilter words={words} selected={tags} onChange={setTags} />
           )}
           <Segmented
+            label="Practice"
+            value={settings.practiceSentences ? 'both' : 'words'}
+            onChange={(v) => updateSettings({ practiceSentences: v === 'both' })}
+            options={[
+              { value: 'words', label: 'Words only' },
+              { value: 'both', label: 'Words + sentences' },
+            ]}
+          />
+          <Segmented
             label="Cards"
             value={String(settings.practiceSize) as '10' | '20' | '50'}
             onChange={(v) => updateSettings({ practiceSize: Number(v) })}
@@ -69,7 +83,7 @@ export function PracticeScreen() {
               { value: '50', label: '50' },
             ]}
           />
-          <button className="btn primary block" disabled={!canStart} onClick={() => setSession(pickPractice(pool, size))}>
+          <button className="btn primary block" disabled={!canStart} onClick={() => setSession({ words: pickPractice(pool, split.words), sentences: pickSentencePractice(sentencePool, split.sentences) })}>
             {size ? `Start practice (${size} card${size === 1 ? '' : 's'})` : 'No learned words here'}
           </button>
         </div>

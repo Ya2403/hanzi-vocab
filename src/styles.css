@@ -2912,3 +2912,37 @@ body.in-session .content {
 body.in-session .view-switch {
   display: none;
 }
+
+/* ---------- Sentence stats & review ---------- */
+.dialogue-progress {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.dp-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.dialogue-progress .lp-bar {
+  display: block;
+  width: 100%;
+}
+.cloze-translation {
+  font-size: 1.1rem;
+}
+.cloze-sentence {
+  margin-top: 8px;
+}
+.cloze-gap {
+  color: var(--accent);
+  letter-spacing: 2px;
+}
+.sentence-status {
+  margin-left: auto;
+}

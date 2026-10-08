@@ -141,8 +141,6 @@ describe('cards for due skills', () => {
       { kind: 'flash', dir: 'zh-en', skills: ['meaning', 'pinyin'] },
       { kind: 'flash', dir: 'en-zh', skills: ['recall'] },
     ]);
-    const cloze = cardsFor(word, ['meaning', 'recall'], { ...opts, mode: 'sentence' });
-    expect(cloze.map((s) => [s.card.kind, s.scheduled])).toEqual([['cloze', ['meaning', 'recall']]]);
   });
 
   it('asks radical-only entries meaning on its own', () => {

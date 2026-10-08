@@ -166,3 +166,30 @@ export function responseOptions(lines: Sentence[], i: number, n: number, rnd: ()
   const others = lines.filter((l, k) => k !== i && k !== i - 1 && l.zh !== right.zh);
   return pickN([right, ...pickN(others, n - 1, rnd)], Math.min(n, others.length + 1), rnd);
 }
+
+// ---------- Continue ----------
+
+export interface SentencePlan {
+  group: LearnGroup;
+  /** What to learn: a dialogue's translated lines, or loose sentences up to what's left today. */
+  sentences: Sentence[];
+  isDialogue: boolean;
+}
+
+/**
+ * The first group of new sentences that is ready and fits today's limit (a dialogue is learned
+ * whole: its new lines must fit what's left, unless nothing was learned today).
+ */
+export function nextReadyGroup(groups: LearnGroup[], links: Links, percent: number, allowance: number, doneToday: number): SentencePlan | null {
+  if (allowance <= 0) return null;
+  for (const g of groups) {
+    const fresh = g.sentences.filter(canLearn);
+    if (!fresh.length || !readiness(fresh, links, percent).ready) continue;
+    if (g.dialogue) {
+      if (fresh.length > allowance && doneToday > 0) continue;
+      return { group: g, sentences: g.sentences.filter((s) => s.translation.trim()), isDialogue: true };
+    }
+    return { group: g, sentences: fresh.slice(0, allowance), isDialogue: false };
+  }
+  return null;
+}

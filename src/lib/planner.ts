@@ -116,13 +116,11 @@ export type Part = 'choice' | 'typing';
  * - pair: the two-step card, meaning then pinyin, for the same hanzi;
  * - single: one skill (multiple choice, typing, listening or writing);
  * - flash: a flashcard with one grade row per skill;
- * - cloze: a sentence with the word blanked out (meaning + recall).
  */
 export type Card =
   | { kind: 'pair'; p: Part }
   | { kind: 'single'; skill: Skill; ex: Exercise; dir: CardDirection }
-  | { kind: 'flash'; dir: CardDirection; skills: Skill[] }
-  | { kind: 'cloze' };
+  | { kind: 'flash'; dir: CardDirection; skills: Skill[] };
 
 export interface Step {
   id: string;
@@ -145,8 +143,6 @@ export function testedSkills(card: Card): Skill[] {
       return [card.skill];
     case 'flash':
       return card.skills;
-    case 'cloze':
-      return ['meaning', 'recall'];
   }
 }
 
@@ -182,10 +178,7 @@ export function cardsFor(w: Word, skills: Skill[], opts: PlanOpts): Step[] {
   const add = (card: Card, scheduled: Skill[]) => steps.push({ id: w.id, card, scheduled });
   const single = (skill: Skill, ex: Exercise): Card => ({ kind: 'single', skill, ex, dir: SKILL_DIR[skill] });
 
-  if (mode === 'sentence' && (has('meaning') || has('recall')) && !radical) {
-    add({ kind: 'cloze' }, skills.filter((k) => k === 'meaning' || k === 'recall'));
-    if (has('pinyin')) add({ kind: 'pair', p: 'choice' }, ['pinyin']);
-  } else if (mp.length) {
+  if (mp.length) {
     if (radical) add(mode === 'flashcards' ? { kind: 'flash', dir: 'zh-en', skills: ['meaning'] } : single('meaning', 'choice'), ['meaning']);
     else if (mode === 'flashcards') add({ kind: 'flash', dir: 'zh-en', skills: ['meaning', 'pinyin'] }, mp);
     else if (mode === 'choice' && opts.choiceStyle === 'match' && mp.length === 1) add(single(mp[0], 'choice'), mp);
@@ -194,7 +187,7 @@ export function cardsFor(w: Word, skills: Skill[], opts: PlanOpts): Step[] {
     else if (mode === 'auto') add({ kind: 'pair', p: partFor(w, 'pinyin', on) }, mp);
     else add({ kind: 'pair', p: 'choice' }, mp);
   }
-  if (has('recall') && !(mode === 'sentence' && !radical)) {
+  if (has('recall')) {
     if (mode === 'flashcards') add({ kind: 'flash', dir: 'en-zh', skills: ['recall'] }, ['recall']);
     else if (mode === 'auto') add(single('recall', chooseExercise(w, 'recall', opts).ex), ['recall']);
     else add(single('recall', mode === 'typing' ? 'typing' : 'choice'), ['recall']);
@@ -219,7 +212,6 @@ export function practiceCard(w: Word, direction: Direction, opts: PlanOpts): Ste
   let skill: Skill;
   if (opts.mode === 'auto') skill = weakestSkill(w, opts.on) ?? 'meaning';
   else if (opts.mode === 'writing') skill = 'writing';
-  else if (opts.mode === 'sentence') skill = 'recall';
   else {
     const dirs: CardDirection[] = ['zh-en', 'en-zh', 'zh-py'];
     const dir = direction === 'mixed' ? dirs[Math.floor(rnd() * dirs.length)] : direction;

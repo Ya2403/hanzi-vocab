@@ -115,7 +115,7 @@ export interface Dialogue {
   updatedAt: number;
 }
 
-export type PracticeMode = 'flashcards' | 'choice' | 'typing' | 'writing' | 'sentence';
+export type PracticeMode = 'flashcards' | 'choice' | 'typing' | 'writing';
 /** zh-en: show Chinese, recall meaning. en-zh: show meaning, recall Chinese. zh-py: show Chinese, recall pinyin. */
 export type CardDirection = 'zh-en' | 'en-zh' | 'zh-py';
 export type Direction = CardDirection | 'mixed';

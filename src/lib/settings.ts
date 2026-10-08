@@ -20,12 +20,12 @@ export interface Settings {
   writingStyle: 'strokes' | 'free';
   /** Choice mode: one word with four answers, or match several pairs at once. */
   choiceStyle: 'single' | 'match';
-  /** Sentence mode: your own example sentences only, or also Tatoeba's. */
-  sentenceSource: 'mine' | 'both';
   /** Review/Practice: pick each card's exercise from the word's strength (off = choose modes yourself). */
   autoExercise: boolean;
   /** Practice: cards per session. */
   practiceSize: number;
+  /** Practice: words only, or words and sentences. */
+  practiceSentences: boolean;
   /** Learn mode: words taught per batch. */
   learnBatchSize: number;
   /** Learn mode: new words per day. */
@@ -65,9 +65,9 @@ const defaults: Settings = {
   breakdownOpen: false,
   writingStyle: 'strokes',
   choiceStyle: 'single',
-  sentenceSource: 'both',
   autoExercise: true,
   practiceSize: 20,
+  practiceSentences: true,
   learnBatchSize: 6,
   learnDailyLimit: 15,
   sentenceDailyLimit: 6,
@@ -87,7 +87,11 @@ const listeners = new Set<() => void>();
 function load(): Settings {
   try {
     const raw = localStorage.getItem(KEY);
-    return raw ? { ...defaults, ...JSON.parse(raw) } : defaults;
+    if (!raw) return defaults;
+    const stored = { ...defaults, ...JSON.parse(raw) } as Settings;
+    // The word "Sentence" mode was replaced by sentence items with their own exercises.
+    for (const k of ['reviewMode', 'practiceMode'] as const) if ((stored[k] as string) === 'sentence') stored[k] = 'choice';
+    return stored;
   } catch {
     return defaults;
   }

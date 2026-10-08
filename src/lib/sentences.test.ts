@@ -32,6 +32,12 @@ describe('linked words', () => {
     expect(links('学习')).toEqual(['学']);
   });
 
+  it('finds words inside a longer segment (中国 in 中国人)', () => {
+    const more = [...words, w('中国'), w('人')];
+    const got = computeLinks([s('我是中国人。')], more).bySentence.get('s-我是中国人。')!.map((x) => x.hanzi);
+    expect(got).toEqual(['我', '是', '中国', '人']);
+  });
+
   it('orders words by their first appearance', () => {
     const more = [...words, w('你'), w('好')];
     const got = computeLinks([s('你好！你是学生。')], more).bySentence.get('s-你好！你是学生。')!.map((x) => x.hanzi);

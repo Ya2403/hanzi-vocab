@@ -1,18 +1,6 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-// Node has no localStorage; the rotation helper only needs get/set.
-const store = new Map<string, string>();
-globalThis.localStorage ??= {
-  getItem: (k: string) => store.get(k) ?? null,
-  setItem: (k: string, v: string) => void store.set(k, v),
-  removeItem: (k: string) => void store.delete(k),
-  clear: () => store.clear(),
-  key: (i: number) => [...store.keys()][i] ?? null,
-  get length() {
-    return store.size;
-  },
-} as Storage;
-import { buildCorpus, findSentences, matchLabel, pickRotating } from './tatoeba';
+import { buildCorpus, findSentences, matchLabel } from './tatoeba';
 import { newSrs } from './srs';
 import type { Word } from './types';
 
@@ -73,24 +61,5 @@ describe('segments the segmenter glued together', () => {
   it('stay unknown when part of them is not learned', () => {
     const [m] = findSentences(glued, { hanzi: '学校' }, [word('我', true)]);
     expect(m.unknown).toEqual(['我去']);
-  });
-});
-
-describe('pickRotating', () => {
-  beforeEach(() => localStorage.clear());
-  const c = [{ key: 'a' }, { key: 'b' }, { key: 'c' }];
-
-  it('uses a different sentence each time while there are unused ones', () => {
-    expect([1, 2, 3].map(() => pickRotating('w', c)!.key)).toEqual(['a', 'b', 'c']);
-  });
-
-  it('then cycles back to the least recently shown', () => {
-    [1, 2, 3].forEach(() => pickRotating('w', c));
-    expect(pickRotating('w', c)!.key).toBe('a');
-  });
-
-  it('keeps using the only sentence there is', () => {
-    expect(pickRotating('x', [{ key: 'only' }])!.key).toBe('only');
-    expect(pickRotating('x', [{ key: 'only' }])!.key).toBe('only');
   });
 });

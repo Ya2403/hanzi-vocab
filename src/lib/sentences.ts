@@ -88,12 +88,22 @@ export function linkedWordIds(s: Pick<Sentence, 'zh' | 'wordIds'>, byHanzi: Map<
       if (at >= 0) take(w, at);
     }
   }
-  // Single characters that aren't part of a linked word.
-  [...text].forEach((c, i) => {
-    if (covered[i] || !CJK.test(c)) return;
-    const w = byHanzi.get(c);
-    if (w) take(w, i);
-  });
+  // What's left (e.g. 中国 inside the segment 中国人): longest words first, then single characters.
+  for (let i = 0; i < text.length; ) {
+    if (covered[i] || !CJK.test(text[i])) {
+      i++;
+      continue;
+    }
+    let hit: Word | undefined;
+    for (let n = Math.min(4, text.length - i); n >= 1 && !hit; n--) {
+      if (covered.slice(i, i + n).some(Boolean)) continue;
+      hit = byHanzi.get(text.slice(i, i + n));
+    }
+    if (hit) {
+      take(hit, i);
+      i += hit.hanzi.length;
+    } else i++;
+  }
   const auto = [...found].sort((a, b) => a[1] - b[1]).map(([id]) => id);
   return [...new Set([...auto, ...(s.wordIds ?? [])])];
 }
