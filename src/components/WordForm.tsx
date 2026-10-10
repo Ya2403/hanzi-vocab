@@ -11,13 +11,14 @@ import { SpeakButton } from './SpeakButton';
 import { Icon } from './Icon';
 import { FindSentences } from './Sentences';
 
-export function WordForm({ word, onClose }: { word?: Word; onClose(): void }) {
+/** `initial`: prefilled fields for a new word (e.g. a word tapped in the reader). */
+export function WordForm({ word, initial, onClose }: { word?: Word; initial?: Partial<Pick<Word, 'hanzi' | 'pinyin' | 'meaning' | 'tags'>>; onClose(): void }) {
   const { words, links, addWord, updateWord, addSentences } = useStore();
-  const [hanzi, setHanzi] = useState(word?.hanzi ?? '');
-  const [pinyin, setPinyin] = useState(word?.pinyin ?? '');
+  const [hanzi, setHanzi] = useState(word?.hanzi ?? initial?.hanzi ?? '');
+  const [pinyin, setPinyin] = useState(word?.pinyin ?? initial?.pinyin ?? '');
   // Keep pinyin in sync with hanzi until the user types their own.
   const [pinyinAuto, setPinyinAuto] = useState(!word || word.pinyin === toPinyin(word.hanzi));
-  const [meaning, setMeaning] = useState(word?.meaning ?? '');
+  const [meaning, setMeaning] = useState(word?.meaning ?? initial?.meaning ?? '');
   // A new example sentence, saved as a Sentence linked to this word.
   const [example, setExample] = useState('');
   const [exampleTranslation, setExampleTranslation] = useState('');
@@ -34,7 +35,7 @@ export function WordForm({ word, onClose }: { word?: Word; onClose(): void }) {
     if (confirm(`Reset all review progress for “${live.hanzi}”? It will be treated as a new word (learn it again in Learn), and all its skills, lapse counts and leech marks are cleared.`))
       updateWord({ ...live, skills: {}, learnedOn: undefined, toneErrors: undefined });
   };
-  const [tagText, setTagText] = useState(word?.tags.join(', ') ?? '');
+  const [tagText, setTagText] = useState((word?.tags ?? initial?.tags)?.join(', ') ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

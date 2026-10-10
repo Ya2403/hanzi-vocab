@@ -115,6 +115,7 @@ export function normalizeDialogue(raw: unknown, fallbackTime: number = Date.now(
     title: str(r.title) || 'Dialogue',
     tags: normalizeTags(Array.isArray(r.tags) ? r.tags.filter((t): t is string => typeof t === 'string') : []),
     lines,
+    lastRead: typeof r.lastRead === 'number' ? r.lastRead : undefined,
     createdAt: num(r.createdAt, fallbackTime),
     updatedAt: num(r.updatedAt, fallbackTime),
   };

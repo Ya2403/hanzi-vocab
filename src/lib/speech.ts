@@ -26,19 +26,20 @@ export function onVoicesChanged(cb: () => void): () => void {
   return () => speechSynthesis.removeEventListener('voiceschanged', cb);
 }
 
-export function speak(text: string): void {
+/** `rate` overrides the speech-rate setting (e.g. the reader's speed control). */
+export function speak(text: string, rate?: number): void {
   if (!speechSupported || !text.trim()) return;
   speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
   u.lang = 'zh-CN';
   const voice = pickVoice();
   if (voice) u.voice = voice;
-  u.rate = getSettings().speechRate;
+  u.rate = rate ?? getSettings().speechRate;
   speechSynthesis.speak(u);
 }
 
 /** Read several texts one after another (e.g. a whole dialogue); `onEnd` runs after the last. */
-export function speakAll(texts: string[], onEnd?: () => void): void {
+export function speakAll(texts: string[], onEnd?: () => void, rate?: number): void {
   const list = texts.filter((t) => t.trim());
   if (!speechSupported || !list.length) return onEnd?.();
   speechSynthesis.cancel();
@@ -47,7 +48,7 @@ export function speakAll(texts: string[], onEnd?: () => void): void {
     const u = new SpeechSynthesisUtterance(text);
     u.lang = 'zh-CN';
     if (voice) u.voice = voice;
-    u.rate = getSettings().speechRate;
+    u.rate = rate ?? getSettings().speechRate;
     if (i === list.length - 1 && onEnd) {
       u.onend = () => onEnd();
       u.onerror = () => onEnd();

@@ -124,6 +124,8 @@ export interface Dialogue {
   title: string;
   tags: string[];
   lines: DialogueLine[];
+  /** When it was last read through in the Reader (ms). */
+  lastRead?: number;
   createdAt: number;
   updatedAt: number;
 }

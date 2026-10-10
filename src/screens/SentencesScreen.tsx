@@ -11,6 +11,8 @@ import { Modal } from '../components/Modal';
 import { NeedsTranslation, SentenceForm, SentenceRow, WordChips } from '../components/SentenceParts';
 import { BulkSentences, FillTranslations } from '../components/SentenceBulk';
 import { SpeakButton } from '../components/SpeakButton';
+import { lastReadOf, Reader, type ReaderText } from '../components/Reader';
+import { formatDate, toDateStr } from '../lib/date';
 
 const NEEDS = '__needs__';
 
@@ -37,6 +39,7 @@ export function SentencesView({ onOpenWord }: { onOpenWord(w: Word): void }) {
   const [editing, setEditing] = useState<Sentence | 'new' | null>(null);
   const [bulk, setBulk] = useState<'sentences' | 'dialogue' | null>(null);
   const [filling, setFilling] = useState(false);
+  const [reading, setReading] = useState<ReaderText | null>(null);
 
   const titles = useMemo(() => new Map(dialogues.map((d) => [d.id, d.title])), [dialogues]);
   const missing = sentences.filter(needsTranslation).length;
@@ -56,6 +59,8 @@ export function SentencesView({ onOpenWord }: { onOpenWord(w: Word): void }) {
       )
       .sort((a, b) => b.createdAt - a.createdAt);
   }, [sentences, query, tag]);
+
+  if (reading) return <Reader text={reading} onClose={() => setReading(null)} />;
 
   const remove = (s: Sentence) => {
     if (confirm(`Delete “${s.zh}”?${s.dialogueId ? ' It is also removed from its dialogue.' : ''}`)) deleteSentences([s.id]);
@@ -109,6 +114,16 @@ export function SentencesView({ onOpenWord }: { onOpenWord(w: Word): void }) {
               {visible.length} of {sentences.length} sentences
             </span>
             <span className="row">
+              {tag && tag !== NEEDS && visible.length > 0 && (
+                <button
+                  className="link-btn"
+                  onClick={() =>
+                    setReading({ key: `t:${tag}`, title: tag, lines: [...visible].sort((a, b) => a.createdAt - b.createdAt).map((x) => ({ sentence: x })) })
+                  }
+                >
+                  📖 Read “{tag}”{lastReadOf(`t:${tag}`) ? ` · read ${formatDate(toDateStr(new Date(lastReadOf(`t:${tag}`)!)))}` : ''}
+                </button>
+              )}
               {missing > 0 && (
                 <button className="link-btn" onClick={() => setFilling(true)}>
                   Fill {missing} missing translation{missing === 1 ? '' : 's'}
@@ -152,9 +167,32 @@ export function DialoguesView({ onOpenWord }: { onOpenWord(w: Word): void }) {
   const { dialogues, sentences } = useStore();
   const [adding, setAdding] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [readingId, setReadingId] = useState<string | null>(null);
   const byId = useMemo(() => new Map(sentences.map((s) => [s.id, s])), [sentences]);
   const list = [...dialogues].sort((a, b) => a.title.localeCompare(b.title, undefined, { numeric: true }));
   const open = dialogues.find((d) => d.id === openId);
+  const reading = dialogues.find((d) => d.id === readingId);
+
+  if (reading) {
+    const text: ReaderText = {
+      key: `d:${reading.id}`,
+      title: reading.title,
+      dialogueId: reading.id,
+      lines: reading.lines.map((l) => ({ sentence: byId.get(l.sentenceId)!, speaker: l.speaker })).filter((l) => !!l.sentence),
+    };
+    return (
+      <>
+        <Reader
+          text={text}
+          onClose={() => setReadingId(null)}
+          onEdit={() => {
+            setReadingId(null);
+            setOpenId(reading.id);
+          }}
+        />
+      </>
+    );
+  }
 
   return (
     <>
@@ -180,13 +218,14 @@ export function DialoguesView({ onOpenWord }: { onOpenWord(w: Word): void }) {
               const lines = d.lines.map((l) => byId.get(l.sentenceId)).filter((s): s is Sentence => !!s);
               const missing = lines.filter(needsTranslation).length;
               return (
-                <li key={d.id} className="card dialogue-card" onClick={() => setOpenId(d.id)} role="button" tabIndex={0}>
+                <li key={d.id} className="card dialogue-card" onClick={() => setReadingId(d.id)} role="button" tabIndex={0}>
                   <div className="dialogue-title" lang="zh-CN">
                     {d.title}
                   </div>
                   <div className="muted small">
                     {lines.length} line{lines.length === 1 ? '' : 's'}
                     {missing > 0 && ` · ${missing} without translation`}
+                    {d.lastRead ? ` · read ${formatDate(toDateStr(new Date(d.lastRead)))}` : ' · not read yet'}
                   </div>
                   <div className="dialogue-preview" lang="zh-CN">
                     {lines

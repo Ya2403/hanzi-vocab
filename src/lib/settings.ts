@@ -8,6 +8,8 @@ export type Tones = 'ignore' | 'show' | 'required';
 export interface Settings {
   autoPlay: boolean;
   speechRate: number;
+  /** Reader: audio speed (0.6 / 0.8 / 1). */
+  readerRate: number;
   practiceMode: PracticeMode;
   practiceDirection: Direction;
   /** Writing: trace over the outline before writing from memory (always, only for new or weak words, never). */
@@ -50,6 +52,7 @@ const WRITING_UI = false;
 const defaults: Settings = {
   autoPlay: true,
   speechRate: 0.8,
+  readerRate: 0.8,
   practiceMode: 'choice',
   practiceDirection: 'mixed',
   traceMode: 'weak',
