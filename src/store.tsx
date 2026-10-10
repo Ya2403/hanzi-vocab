@@ -40,8 +40,10 @@ interface Store {
   /** Delete a dialogue; its sentences are deleted too, or kept as loose sentences. */
   deleteDialogue(id: string, withSentences: boolean): Promise<void>;
   importData(data: ExportData & { hasSentences: boolean }, mode: ImportMode): Promise<{ added: number; skipped: number; sentences: number }>;
-  /** Count one answered card toward today's stats and the streak. */
+  /** Count one answered card toward today's stats. */
   recordReview(): Promise<void>;
+  /** A finished practice (or learn) session: today counts for the streak. */
+  completeSession(): Promise<void>;
 }
 
 const StoreContext = createContext<Store | null>(null);
@@ -280,17 +282,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   streakRef.current = streak;
   dailyRef.current = daily;
 
-  const recordReview = useCallback(async () => {
-    const on = today();
-    const prevDaily = dailyRef.current;
-    const nextStreak = bumpStreak(streakRef.current, on);
-    const nextDaily = { date: on, reviews: (prevDaily.date === on ? prevDaily.reviews : 0) + 1 };
+  const saveMeta = async (nextStreak: StreakState, nextDaily: DailyStats) => {
     streakRef.current = nextStreak;
     dailyRef.current = nextDaily;
     setStreak(nextStreak);
     setDaily(nextDaily);
     await Promise.all([db.setMeta('streak', nextStreak), db.setMeta('daily', nextDaily)]);
     pushMeta({ streak: nextStreak, daily: nextDaily });
+  };
+
+  const recordReview = useCallback(async () => {
+    const on = today();
+    const prevDaily = dailyRef.current;
+    await saveMeta(streakRef.current, { date: on, reviews: (prevDaily.date === on ? prevDaily.reviews : 0) + 1 });
+  }, []);
+
+  const completeSession = useCallback(async () => {
+    const on = today();
+    const prevDaily = dailyRef.current;
+    await saveMeta(bumpStreak(streakRef.current, on), prevDaily.date === on ? prevDaily : { date: on, reviews: 0 });
   }, []);
 
   // ---------- Sync ----------
@@ -360,6 +370,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       deleteDialogue,
       importData,
       recordReview,
+      completeSession,
     }),
     [W.items, S.items, D.items, links, loading, error, streak, daily],
   );

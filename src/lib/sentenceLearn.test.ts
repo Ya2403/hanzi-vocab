@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { computeLinks, createSentence } from './sentences';
-import { buildTiles, learnedSentenceSkills, learnGroups, readiness, responseOptions, sentenceTiles, tilesCorrect, translationOptions } from './sentenceLearn';
+import { buildTiles, clozeOptions, clozeTarget, isReadable, learnGroups, readiness, responseOptions, sentenceTiles, tilesCorrect, translationOptions } from './sentenceLearn';
 import { newSrs } from './srs';
 import type { Dialogue, Sentence, Word } from './types';
 
@@ -82,8 +82,25 @@ describe('exercise material', () => {
     expect(opts.map((o) => o.zh)).not.toContain('你好！你叫什么名字？'); // the prompt
   });
 
-  it('starts learned sentences with both skills due tomorrow, keeping learn answers', () => {
-    const skills = learnedSentenceSkills({ produce: { answered: 2, correct: 1, recent: '01' } }, '2026-10-04');
-    expect([skills.understand!.due, skills.produce!.due, skills.produce!.recent]).toEqual(['2026-10-05', '2026-10-05', '01']);
+});
+
+describe('readable sentences and blanks', () => {
+  const words = [w('我', true), w('是', true), w('学生', false), w('老师', true), w('朋友', true), w('猫', true)];
+  const links = computeLinks([s('我是老师。'), s('我是学生。'), s('谢谢。')], words);
+
+  it('is readable when all its words are learned', () => {
+    expect(isReadable(s('我是老师。'), links)).toBe(true);
+    expect(isReadable(s('我是学生。'), links)).toBe(false);
+    expect(isReadable(s('谢谢。'), links)).toBe(false); // none of my words
+  });
+
+  it('blanks a learned word, longer ones first, with options not in the sentence', () => {
+    const sentence = s('我是老师。');
+    const target = clozeTarget(sentence, links.bySentence.get(sentence.id)!, () => 0)!;
+    expect(target.hanzi).toBe('老师');
+    const opts = clozeOptions(target, sentence, words, 4, () => 0).map((x) => x.hanzi);
+    expect(opts.sort()).toEqual(['朋友', '猫', '老师'].sort()); // only 3 learned words fit
+    expect(opts).not.toContain('我');
+    expect(opts).not.toContain('学生'); // not learned
   });
 });

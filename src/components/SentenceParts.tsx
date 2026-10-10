@@ -3,9 +3,7 @@ import { useStore } from '../store';
 import { toPinyin } from '../lib/pinyin';
 import { computeLinks, createSentence, needsTranslation } from '../lib/sentences';
 import { parseTagText } from '../lib/words';
-import { formatDate, today } from '../lib/date';
-import { isSentenceLearned } from '../lib/sentenceLearn';
-import { isSentenceDue, sentenceNextDue } from '../lib/sentenceReview';
+import { isReadable } from '../lib/sentenceLearn';
 import type { Sentence, Word } from '../lib/types';
 import { Icon } from './Icon';
 import { Modal } from './Modal';
@@ -80,13 +78,7 @@ export function SentenceRow({
         <WordChips words={links.bySentence.get(s.id) ?? []} onOpen={onOpenWord} />
         {(
           <div className="word-meta">
-            {!isSentenceLearned(s) ? (
-              <span className="status new">new</span>
-            ) : isSentenceDue(s) ? (
-              <span className="status due">due</span>
-            ) : (
-              <span className="status">{formatDate(sentenceNextDue(s) ?? today())}</span>
-            )}
+            {isReadable(s, links) && <span className="status ready">readable</span>}
             {dialogueTitle && <span className="tag dialogue-tag">💬 {dialogueTitle}</span>}
             {s.tags.map((t) => (
               <span key={t} className="tag">

@@ -70,15 +70,20 @@ describe('nextBatch', () => {
 });
 
 describe('learned state', () => {
-  it('is not new anymore and every skill is first due tomorrow', () => {
-    const skills = learnedSkills({ hanzi: '好' }, {}, '2026-09-27');
+  const NOW = new Date('2026-09-27T12:00:00').getTime();
+  it('is not new anymore; every skill has had a first FSRS review and comes back within days', () => {
+    const skills = learnedSkills({ hanzi: '好' }, {}, NOW);
     expect(isNew({ ...w('好'), skills })).toBe(false);
     expect(Object.keys(skills)).toEqual(['meaning', 'pinyin', 'recall']);
-    expect(Object.values(skills).map((x) => x!.due)).toEqual(['2026-09-28', '2026-09-28', '2026-09-28']);
+    for (const x of Object.values(skills)) {
+      expect(x!.fsrs).toBeDefined();
+      expect(x!.reps).toBe(1);
+      expect(x!.due > '2026-09-27' && x!.due < '2026-10-03').toBe(true);
+    }
   });
 
   it('keeps the answers given while learning', () => {
-    const skills = learnedSkills({ hanzi: '好' }, { pinyin: { answered: 3, correct: 2, recent: '101' } }, '2026-09-27');
+    const skills = learnedSkills({ hanzi: '好' }, { pinyin: { answered: 3, correct: 2, recent: '101' } }, NOW);
     expect([skills.pinyin!.answered, skills.pinyin!.recent, skills.meaning!.answered]).toEqual([3, '101', undefined]);
   });
 

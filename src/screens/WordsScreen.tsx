@@ -1,9 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useStore } from '../store';
-import { formatDate, today } from '../lib/date';
 import { normalizeSearch, toPinyin } from '../lib/pinyin';
-import { isDueLearned, isLeech, isNew, leechSkills, LEECH_FILTER, nextDue } from '../lib/srs';
-import { strength, type Strength } from '../lib/planner';
+import { isLeech, isNew, leechSkills, LEECH_FILTER } from '../lib/srs';
+import { strength, wordPriority, type Strength } from '../lib/planner';
 import { updateSettings, useSettings } from '../lib/settings';
 import { LeechBadge, useWordSentences } from '../components/WordExtras';
 import { sampleWords } from '../lib/sample';
@@ -16,7 +15,7 @@ import { WordDetail } from '../components/WordDetail';
 import { Segmented } from '../components/Segmented';
 import { DialoguesView, SentencesView } from './SentencesScreen';
 
-type Sort = 'newest' | 'oldest' | 'due' | 'pinyin';
+type Sort = 'newest' | 'oldest' | 'weakest' | 'pinyin';
 type ListView = 'words' | 'sentences' | 'dialogues';
 const VIEW_KEY = 'hanzi-vocab:listView';
 
@@ -66,7 +65,8 @@ export function WordsScreen() {
     const cmp: Record<Sort, (a: Word, b: Word) => number> = {
       newest: (a, b) => b.createdAt - a.createdAt,
       oldest: (a, b) => a.createdAt - b.createdAt,
-      due: (a, b) => (nextDue(a) ?? '9999').localeCompare(nextDue(b) ?? '9999'),
+      // Highest practice priority first; new words last.
+      weakest: (a, b) => (wordPriority(b)?.priority ?? -1) - (wordPriority(a)?.priority ?? -1),
       pinyin: (a, b) => normalizeSearch(a.pinyin).localeCompare(normalizeSearch(b.pinyin)),
     };
     return list.sort(cmp[sort]);
@@ -156,7 +156,7 @@ export function WordsScreen() {
             <select className="select" value={sort} onChange={(e) => setSort(e.target.value as Sort)} aria-label="Sort">
               <option value="newest">Newest</option>
               <option value="oldest">Oldest</option>
-              <option value="due">Due soonest</option>
+              <option value="weakest">Weakest first</option>
               <option value="pinyin">Pinyin A–Z</option>
             </select>
             <button
@@ -222,7 +222,7 @@ export function WordsScreen() {
   );
 }
 
-const STRENGTH_LABEL: Record<Strength, string> = { weak: 'weak', medium: 'medium', strong: 'strong', veryStrong: 'very strong' };
+const STRENGTH_LABEL: Record<Strength, string> = { weak: 'weak', medium: 'medium', strong: 'strong' };
 
 function WordRow({
   word,
@@ -245,7 +245,6 @@ function WordRow({
       <span className={`status strength ${strength(word)}`} title="Strength of the weakest skill">
         {STRENGTH_LABEL[strength(word)]}
       </span>
-      {isDueLearned(word) ? <span className="status due">due</span> : <span className="status">{formatDate(nextDue(word) ?? today())}</span>}
     </>
   );
 

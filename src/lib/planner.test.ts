@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { cardsFor, chooseExercise, isLessonTag, orderSteps, pickPractice, practiceCard, retryOf, reviewCards, testedSkills, skillStrength, strength, weakestSkill, weakness } from './planner';
-import { activeSkills, dueSkills, isDueLearned, isLeech, leechSkills, learnedSkills, newSrs, practiceMiss, recordAnswer, unmarkLeech } from './srs';
+import { balanceHint, cardsFor, chooseExercise, isLessonTag, isRusty, pickSession, practiceCard, retryOf, skillPriority, skillStrength, spreadSteps, strength, testedSkills, weakestSkill } from './planner';
+import { activeSkills, isLeech, leechSkills, newSrs, recordAnswer, unmarkLeech } from './srs';
 import type { SkillState, Skills, Word } from './types';
 
 const ON = '2026-09-27';
@@ -25,8 +25,8 @@ const w = (hanzi: string, all: Partial<SkillState>, per: Partial<Record<keyof Sk
 });
 const fixed = (x: number) => () => x;
 
-describe('skill strength', () => {
-  it('classifies skills', () => {
+describe('skill strength (FSRS stability)', () => {
+  it('classifies skills as weak / medium / strong', () => {
     const list = [
       st({ reps: 1, interval: 1 }),
       st({ reps: 2, interval: 6 }),
@@ -34,8 +34,8 @@ describe('skill strength', () => {
       st({ reps: 5, interval: 40, ease: 2.6 }),
       st({ reps: 4, interval: 30, recent: '10100' }),
     ];
-    expect(list.map((s) => skillStrength(s, undefined, ON))).toEqual(['weak', 'medium', 'strong', 'veryStrong', 'weak']);
-    expect(skillStrength(st({ reps: 5, interval: 40 }), '2026-09-26', ON)).toBe('weak'); // recently learned
+    expect(list.map((s) => skillStrength(s, undefined, ON))).toEqual(['weak', 'medium', 'medium', 'strong', 'weak']);
+    expect(skillStrength(st({ reps: 5, interval: 40 }), '2026-09-26', ON)).toBe('weak'); // learned yesterday
   });
 
   it('makes a word as strong as its weakest skill', () => {
@@ -48,9 +48,9 @@ describe('skill strength', () => {
 describe('exercise choice per skill', () => {
   const weak = w('学', { reps: 1, interval: 1 });
   const medium = w('中', { reps: 2, interval: 6 });
-  const strong = w('国', { reps: 3, interval: 15 });
+  const strong = w('国', { reps: 5, interval: 30 });
 
-  it('gives weak skills multiple choice in the skill\'s direction', () => {
+  it("gives weak skills multiple choice in the skill's direction", () => {
     expect(chooseExercise(weak, 'meaning', { listening: true, on: ON })).toEqual({ ex: 'choice', dir: 'zh-en' });
     expect(chooseExercise(weak, 'pinyin', { listening: true, on: ON })).toEqual({ ex: 'choice', dir: 'zh-py' });
     expect(chooseExercise(weak, 'recall', { listening: true, on: ON })).toEqual({ ex: 'choice', dir: 'en-zh' });
@@ -62,9 +62,10 @@ describe('exercise choice per skill', () => {
     expect(chooseExercise(medium, 'pinyin', { listening: false, rnd: fixed(0.1), on: ON }).ex).toBe('choice');
   });
 
-  it('gives strong skills typing, and writing cards for the writing skill', () => {
-    expect(chooseExercise(strong, 'recall', { listening: true, on: ON })).toEqual({ ex: 'typing', dir: 'en-zh' });
-    expect(chooseExercise(strong, 'writing', { listening: true, on: ON }).ex).toBe('writing');
+  it('types recall once it is not weak, pinyin once strong; meaning is always multiple choice', () => {
+    expect(chooseExercise(medium, 'recall', { listening: true, on: ON })).toEqual({ ex: 'typing', dir: 'en-zh' });
+    expect(chooseExercise(strong, 'pinyin', { listening: true, on: ON })).toEqual({ ex: 'typing', dir: 'zh-py' });
+    expect(chooseExercise(strong, 'meaning', { listening: true, on: ON })).toEqual({ ex: 'choice', dir: 'zh-en' });
   });
 
   it('only gives radical-only entries multiple choice', () => {
@@ -73,70 +74,19 @@ describe('exercise choice per skill', () => {
   });
 });
 
-describe('due skills and review cards', () => {
-  it('is due when any active skill is due', () => {
-    const word = w('好', { reps: 3, interval: 10 }, { recall: { due: ON } });
-    expect(dueSkills(word, ON, false)).toEqual(['recall']);
-    expect(isDueLearned(word, ON, false)).toBe(true);
-    expect(isDueLearned(w('中', {}), ON, false)).toBe(false);
-  });
-
-  it('never makes new words due', () => {
-    const fresh: Word = { ...w('新', {}), skills: {} };
-    expect(isDueLearned(fresh, ON, true)).toBe(false);
-    expect(activeSkills(fresh, true)).toEqual([]);
-  });
-
-  it('starts the writing skill once recall reaches 6 days, only with writing practice on', () => {
-    const young = w('好', { reps: 2, interval: 5 });
-    const ready = w('好', { reps: 3, interval: 6 });
-    expect(activeSkills(ready, false)).not.toContain('writing');
-    expect(activeSkills(young, true)).not.toContain('writing');
-    expect(activeSkills(ready, true)).toContain('writing');
-    expect(dueSkills(ready, ON, true)).toEqual(['writing']); // a fresh skill is due right away
-  });
-
-  it('orders cards most overdue first without the same word twice in a row', () => {
-    const a = w('一', {}, { meaning: { due: '2026-09-20' }, pinyin: { due: '2026-09-21' }, recall: { due: '2026-09-22' } });
-    const b = w('二', {}, { meaning: { due: '2026-09-25' } });
-    const steps = orderSteps(reviewCards([a, b], { mode: 'choice', listening: false, on: ON }), new Map([a, b].map((x) => [x.id, x])), fixed(0), ON);
-    expect(steps.map((s) => `${s.id}:${testedSkills(s.card).join('+')}`)).toEqual(['一:meaning+pinyin', '二:meaning+pinyin', '一:recall']);
-  });
-});
-
-describe('cards for due skills', () => {
+describe('cards', () => {
   const opts = { mode: 'auto' as const, listening: false, on: ON };
 
-  it('asks meaning and pinyin on one two-step card, scheduling only the due ones', () => {
-    const word = w('好', { reps: 1, interval: 1 }, { pinyin: { due: ON } });
-    const [step] = cardsFor(word, ['pinyin'], opts);
-    expect(step.card).toEqual({ kind: 'pair', p: 'choice' });
-    expect(step.scheduled).toEqual(['pinyin']);
-  });
-
-  it('never asks to type the meaning; types pinyin once strong, characters once recall is medium', () => {
-    const word = w('好', { reps: 4, interval: 20 }, { pinyin: { reps: 1, interval: 1 } });
-    expect(cardsFor(word, ['meaning', 'pinyin'], opts)[0].card).toEqual({ kind: 'pair', p: 'choice' });
-    const strongPinyin = w('好', { reps: 4, interval: 20 });
+  it('asks meaning and pinyin on one two-step card', () => {
+    const word = w('好', { reps: 1, interval: 1 });
+    expect(cardsFor(word, ['pinyin'], opts)[0].card).toEqual({ kind: 'pair', p: 'choice' });
+    const strongPinyin = w('好', { reps: 5, interval: 30 });
     expect(cardsFor(strongPinyin, ['meaning'], opts)[0].card).toEqual({ kind: 'pair', p: 'typing' });
-    expect(chooseExercise(strongPinyin, 'meaning', opts)).toEqual({ ex: 'choice', dir: 'zh-en' });
-    expect(cardsFor(strongPinyin, ['meaning', 'pinyin'], { ...opts, mode: 'typing' })[0].card).toEqual({ kind: 'pair', p: 'typing' });
-    const mediumRecall = w('中', { reps: 2, interval: 6 });
-    expect(chooseExercise(mediumRecall, 'recall', opts)).toEqual({ ex: 'typing', dir: 'en-zh' });
-    expect(chooseExercise(w('学', { reps: 1, interval: 1 }), 'recall', opts).ex).toBe('choice');
   });
 
-  it('gives recall and writing their own cards', () => {
-    const word = w('好', { reps: 4, interval: 20 });
-    const kinds = cardsFor(word, ['recall', 'writing'], opts).map((s) => s.card);
-    expect(kinds).toEqual([
-      { kind: 'single', skill: 'recall', ex: 'typing', dir: 'en-zh' },
-      { kind: 'single', skill: 'writing', ex: 'writing', dir: 'en-zh' },
-    ]);
-  });
-
-  it('uses rows per skill on flashcards and meaning + recall on sentences', () => {
-    const word = w('好', {});
+  it('gives recall its own card; flashcards have rows per skill', () => {
+    const word = w('好', { reps: 5, interval: 30 });
+    expect(cardsFor(word, ['recall'], opts)[0].card).toEqual({ kind: 'single', skill: 'recall', ex: 'typing', dir: 'en-zh' });
     expect(cardsFor(word, ['meaning', 'recall'], { ...opts, mode: 'flashcards' }).map((s) => s.card)).toEqual([
       { kind: 'flash', dir: 'zh-en', skills: ['meaning', 'pinyin'] },
       { kind: 'flash', dir: 'en-zh', skills: ['recall'] },
@@ -144,23 +94,68 @@ describe('cards for due skills', () => {
   });
 
   it('asks radical-only entries meaning on its own', () => {
-    const radical = w('氵', {});
-    expect(cardsFor(radical, ['meaning'], opts)[0].card).toMatchObject({ kind: 'single', skill: 'meaning' });
+    expect(cardsFor(w('氵', {}), ['meaning'], opts)[0].card).toMatchObject({ kind: 'single', skill: 'meaning' });
   });
 
   it('makes a missed card easier when it comes back', () => {
-    const word = w('好', { reps: 4, interval: 20 });
-    const [pair] = cardsFor(word, ['meaning'], opts);
-    expect(retryOf(pair).card).toEqual({ kind: 'pair', p: 'choice' });
-    const [recall] = cardsFor(word, ['recall'], opts);
-    expect(retryOf(recall).card).toMatchObject({ ex: 'choice' });
+    const word = w('好', { reps: 5, interval: 30 });
+    expect(retryOf(cardsFor(word, ['meaning'], opts)[0]).card).toEqual({ kind: 'pair', p: 'choice' });
+    expect(retryOf(cardsFor(word, ['recall'], opts)[0]).card).toMatchObject({ ex: 'choice' });
   });
 
-  it('practice schedules every skill the card tests', () => {
-    const word = w('好', { reps: 4, interval: 20 }, { pinyin: { reps: 1, interval: 1 } });
-    const step = practiceCard(word, 'mixed', opts);
-    expect(step.card.kind).toBe('pair');
-    expect(step.scheduled).toEqual(['meaning', 'pinyin']);
+  it('grades every skill the card tests, and uses the chosen skill', () => {
+    const word = w('好', { reps: 5, interval: 30 });
+    const step = practiceCard(word, 'mixed', { ...opts, skill: 'recall' });
+    expect(testedSkills(step.card)).toEqual(['recall']);
+    expect(step.scheduled).toEqual(['recall']);
+    expect(practiceCard(word, 'mixed', { ...opts, skill: 'pinyin' }).scheduled).toEqual(['meaning', 'pinyin']);
+  });
+
+  it('never shows the same word twice in a row when it can be avoided', () => {
+    expect(spreadSteps([{ id: 'a' }, { id: 'a' }, { id: 'b' }]).map((s) => s.id)).toEqual(['a', 'b', 'a']);
+  });
+});
+
+describe('writing is hidden', () => {
+  it('never adds the writing skill', () => {
+    expect(activeSkills(w('好', { reps: 3, interval: 30 }), true)).toEqual(['meaning', 'pinyin', 'recall']);
+  });
+});
+
+describe('priority and sessions', () => {
+  const fresh = w('新', { reps: 1, interval: 1, lastReviewed: '2026-09-26', due: '2026-09-27' }, {}, { learnedOn: '2026-09-26' });
+  const forgotten = w('忘', { reps: 3, interval: 4, lastReviewed: '2026-08-01', due: '2026-08-05' });
+  const missed = w('错', { reps: 4, interval: 20, lastReviewed: '2026-09-20', due: '2026-10-10', recent: '01010', answered: 10, correct: 5 });
+  const solid = w('好', { reps: 6, interval: 60, lastReviewed: '2026-09-20', due: '2026-11-19', recent: '11111', answered: 10, correct: 10 });
+
+  it('puts likely-forgotten, recently missed and low-accuracy skills first', () => {
+    const p = (x: Word) => skillPriority(x.skills.meaning!, x.learnedOn, NOW);
+    expect(p(forgotten)).toBeGreaterThan(p(solid));
+    expect(p(missed)).toBeGreaterThan(p(solid));
+  });
+
+  it('takes about 80% from the top and 20% at random from the rest, one card per word', () => {
+    const many = Array.from({ length: 20 }, (_, i) => w(`字${i}`, { reps: 6, interval: 60, lastReviewed: '2026-09-20', due: '2026-11-19', recent: '11111', answered: 10, correct: 10 }));
+    const pool = [forgotten, missed, solid, ...many];
+    const picked = pickSession(pool, 10, { now: NOW, rnd: fixed(0.5) });
+    expect(picked).toHaveLength(10);
+    expect(new Set(picked.map((x) => x.word.id)).size).toBe(10);
+    expect(picked.map((x) => x.word.id)).toContain('忘');
+    expect(picked.map((x) => x.word.id)).toContain('错');
+  });
+
+  it('never picks new words, and uses everything when the pool is small', () => {
+    const newWord: Word = { ...w('新', {}), skills: {} };
+    expect(pickSession([newWord, solid], 20, { now: NOW }).map((x) => x.word.id)).toEqual(['好']);
+  });
+
+  it('counts rusty words for the balance hint', () => {
+    expect(isRusty(forgotten, NOW)).toBe(true);
+    expect(isRusty(solid, NOW)).toBe(false);
+    void fresh;
+    expect(balanceHint([forgotten, solid], NOW)).toMatchObject({ rusty: 1, learned: 2, refresh: false });
+    const rustyMany = Array.from({ length: 6 }, (_, i) => w(`锈${i}`, { reps: 3, interval: 4, lastReviewed: '2026-08-01', due: '2026-08-05' }));
+    expect(balanceHint([...rustyMany, solid], NOW).refresh).toBe(true);
   });
 });
 
@@ -174,43 +169,11 @@ describe('leeches per skill', () => {
   });
 });
 
-describe('practice selection', () => {
-  it('ranks recent misses, low accuracy and low ease as weakest', () => {
-    const solid = w('好', { reps: 5, interval: 30, ease: 2.6, due: '2026-10-20', answered: 10, correct: 10, recent: '11111', lastSeen: NOW });
-    const missed = w('难', { reps: 5, interval: 30, ease: 2.6, due: '2026-10-20', answered: 10, correct: 10, recent: '11111', lastSeen: NOW }, {
-      pinyin: { reps: 3, interval: 10, ease: 2.2, due: '2026-10-05', answered: 8, correct: 4, recent: '01010', lastSeen: NOW },
-    });
-    const dueNow = w('中', { reps: 2, interval: 6, ease: 2.5, due: ON, answered: 3, correct: 3, recent: '111', lastSeen: NOW - 7 * 86_400_000 });
-    expect(weakness(missed, ON, NOW)).toBeGreaterThan(weakness(dueNow, ON, NOW));
-    expect(weakness(dueNow, ON, NOW)).toBeGreaterThan(weakness(solid, ON, NOW));
-    expect(pickPractice([solid, missed, dueNow], 2, { on: ON, now: NOW, rnd: fixed(0) }).map((x) => x.hanzi)).toEqual(['难', '中']);
-  });
-
-  it('never picks new (unlearned) words', () => {
-    const fresh: Word = { ...w('新', {}), skills: {} };
-    expect(pickPractice([fresh], 5, { on: ON, now: NOW })).toEqual([]);
-  });
-});
-
-describe('answer stats and practice misses', () => {
+describe('answer stats', () => {
   it('keeps totals and the last five results', () => {
     let s = newSrs(ON);
     for (const ok of [true, false, true, true, true, false]) s = recordAnswer(s, ok, NOW);
     expect([s.answered, s.correct, s.recent]).toEqual([6, 4, '01110']);
-  });
-
-  const learned = (on: string) => learnedSkills({ hanzi: '好' }, {}, on).meaning!;
-
-  it('moves the review to tomorrow at the latest and halves the interval', () => {
-    const { srs } = practiceMiss({ ...learned('2026-09-01'), interval: 20, due: '2026-10-15', reps: 4 }, 5, ON);
-    expect([srs.due, srs.interval, srs.lapses]).toEqual(['2026-09-28', 10, 1]);
-  });
-
-  it('counts a lapse (and can flag a leech) only for well-known skills', () => {
-    const young = practiceMiss({ ...learned('2026-09-26'), interval: 1 }, 1, ON);
-    expect([young.srs.lapses, young.becameLeech]).toEqual([0, false]);
-    const known = practiceMiss({ ...learned('2026-08-01'), interval: 12, lapses: 4 }, 5, ON);
-    expect([known.srs.lapses, known.becameLeech, known.srs.leech]).toEqual([5, true, true]);
   });
 });
 

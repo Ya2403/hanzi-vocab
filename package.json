@@ -1,7 +1,7 @@
 {
   "name": "hanzi-vocab",
   "private": true,
-  "version": "0.15.0",
+  "version": "0.16.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -18,7 +18,8 @@
     "idb": "^8.0.3",
     "pinyin-pro": "^3.26.0",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "ts-fsrs": "^5.4.2"
   },
   "devDependencies": {
     "@types/react": "^19.1.8",

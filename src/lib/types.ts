@@ -29,6 +29,19 @@ export interface SkillState {
   correct?: number;
   recent?: string;
   lastSeen?: number;
+  /** FSRS card (see fsrs.ts). Skills without it still have only SM-2 data, converted when used. */
+  fsrs?: FsrsData;
+}
+
+/** A skill's FSRS card: stability, difficulty, state, last review and due time (ms), counts. */
+export interface FsrsData {
+  s: number;
+  d: number;
+  state: number;
+  last: number;
+  due: number;
+  reps: number;
+  lapses: number;
 }
 
 /** The SM-2 helpers work on any one skill's state. */

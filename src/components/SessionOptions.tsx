@@ -32,7 +32,6 @@ export function SessionOptions({
           { value: 'flashcards', label: 'Cards' },
           { value: 'choice', label: 'Choice' },
           { value: 'typing', label: 'Typing' },
-          { value: 'writing', label: 'Writing' },
         ]}
       />
       {!modeAvailable(mode, totalWords) && (

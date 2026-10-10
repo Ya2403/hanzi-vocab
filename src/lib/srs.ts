@@ -1,4 +1,5 @@
 import { addDays, today } from './date';
+import { fsrsReview, learnedState } from './fsrs';
 import { isRadicalOnly } from './learn';
 import { getSettings } from './settings';
 import { writableChars } from './strokes';
@@ -61,7 +62,10 @@ export const SKILL_DIR: Record<Skill, CardDirection> = { meaning: 'zh-en', pinyi
 /** A word's writing skill starts once its recall interval reaches this (with "Writing practice" on). */
 export const WRITING_START_INTERVAL = 6;
 
-const writingOn = () => getSettings().writingPractice;
+/** Writing practice is hidden for now; the code and any writing data are kept for later. */
+export const WRITING_ENABLED = false;
+
+const writingOn = () => WRITING_ENABLED && getSettings().writingPractice;
 
 /** New = not learned in Learn yet (no skills). */
 export const isNew = (w: Word): boolean => !w.skills.meaning;
@@ -74,7 +78,7 @@ export function activeSkills(w: Word, writing: boolean = writingOn()): Skill[] {
   if (isRadicalOnly(w)) return ['meaning', 'recall'];
   const list: Skill[] = ['meaning', 'pinyin', 'recall'];
   const canWrite = writableChars(w.hanzi).length > 0;
-  if (writing && canWrite && (w.skills.writing || (w.skills.recall?.interval ?? 0) >= WRITING_START_INTERVAL)) list.push('writing');
+  if (WRITING_ENABLED && writing && canWrite && (w.skills.writing || (w.skills.recall?.interval ?? 0) >= WRITING_START_INTERVAL)) list.push('writing');
   return list;
 }
 
@@ -109,9 +113,9 @@ export const leechLapses = (s: SrsState): number => s.lapses - (s.lapsesAtUnmark
 export const leechSkills = (w: Word): Skill[] => (Object.keys(w.skills) as Skill[]).filter((k) => w.skills[k]?.leech);
 export const isLeech = (w: Word): boolean => leechSkills(w).length > 0;
 
-/** Apply a review and flag the skill as a leech the moment a lapse brings it to `threshold`. */
-export function reviewWithLeech(s: SrsState, q: number, threshold: number, on: string = today()) {
-  const next = applyReview(s, q, on);
+/** Review a skill (FSRS) and flag it as a leech the moment a lapse brings it to `threshold`. */
+export function reviewWithLeech(s: SrsState, q: number, threshold: number, now: number = Date.now()) {
+  const next = fsrsReview(s, q, now);
   const becameLeech = !s.leech && next.lapses > s.lapses && leechLapses(next) >= threshold;
   return { srs: becameLeech ? { ...next, leech: true } : next, becameLeech };
 }
@@ -140,36 +144,15 @@ export function recordAnswer(s: SrsState, correct: boolean, now: number = Date.n
 
 export const accuracy = (s: SrsState): number | null => (s.answered ? (s.correct ?? 0) / s.answered : null);
 
-/** A skill counts as "well known" once its interval reached a week. */
-export const WELL_KNOWN_INTERVAL = 7;
-
-/**
- * A miss in free Practice: the skill comes back in Review tomorrow at the latest, with its
- * interval halved so it has to earn long gaps again. For a well-known skill it also counts as a
- * lapse (and can make it a leech). Correct answers in Practice never change the schedule.
- */
-export function practiceMiss(s: SrsState, leechThreshold: number, on: string = today()) {
-  const tomorrow = addDays(on, 1);
-  const wellKnown = s.interval >= WELL_KNOWN_INTERVAL;
-  const next: SrsState = {
-    ...s,
-    due: s.due > tomorrow ? tomorrow : s.due,
-    interval: Math.max(1, Math.round(s.interval / 2)),
-    lapses: s.lapses + (wellKnown ? 1 : 0),
-  };
-  const becameLeech = wellKnown && !s.leech && leechLapses(next) >= leechThreshold;
-  return { srs: becameLeech ? { ...next, leech: true } : next, becameLeech };
-}
-
 // ---------- Learning & migration ----------
 
 export type SkillStats = Pick<SkillState, 'answered' | 'correct' | 'recent' | 'lastSeen'>;
 
-/** Skills of a word just learned in Learn mode: first reviews tomorrow, keeping the answers given while learning. */
-export function learnedSkills(w: Pick<Word, 'hanzi'>, stats: Partial<Record<Skill, SkillStats>> = {}, on: string = today()): Skills {
+/** Skills of a word just learned in Learn mode (a first FSRS review, Good), keeping the answers given while learning. */
+export function learnedSkills(w: Pick<Word, 'hanzi'>, stats: Partial<Record<Skill, SkillStats>> = {}, now: number = Date.now()): Skills {
   const list: Skill[] = isRadicalOnly(w) ? ['meaning', 'recall'] : ['meaning', 'pinyin', 'recall'];
   const skills: Skills = {};
-  for (const k of list) skills[k] = { ease: 2.5, interval: 1, reps: 1, lapses: 0, due: addDays(on, 1), lastReviewed: on, ...stats[k] };
+  for (const k of list) skills[k] = { ...learnedState(now), ...stats[k] };
   return skills;
 }
 

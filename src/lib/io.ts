@@ -2,7 +2,7 @@ import { isValidDateStr, today } from './date';
 import { migrateLegacySrs, newSrs } from './srs';
 import { toPinyin } from './pinyin';
 import { newId, normalizeTags } from './words';
-import { SKILLS, type Dialogue, type Sentence, type SentenceSkills, type SkillState, type Skills, type Word } from './types';
+import { SKILLS, type Dialogue, type Sentence, type FsrsData, type SentenceSkills, type SkillState, type Skills, type Word } from './types';
 
 const FORMAT = 'hanzi-vocab';
 /**
@@ -174,6 +174,14 @@ export function normalizeWord(raw: unknown, fallbackTime: number = Date.now(), o
 /** Stored or synced words written before skills existed need migrating. */
 export const isLegacyWord = (w: unknown): boolean => !!w && typeof w === 'object' && !('skills' in w);
 
+function normalizeFsrs(raw: unknown): FsrsData | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const r = raw as Record<string, unknown>;
+  const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : NaN);
+  const f = { s: n(r.s), d: n(r.d), state: n(r.state), last: n(r.last), due: n(r.due), reps: n(r.reps), lapses: n(r.lapses) };
+  return Object.values(f).every((v) => !Number.isNaN(v)) ? f : undefined;
+}
+
 function normalizeSrs(raw: unknown): SkillState & { learnedOn?: string } {
   const base = newSrs();
   if (!raw || typeof raw !== 'object') return base;
@@ -192,6 +200,7 @@ function normalizeSrs(raw: unknown): SkillState & { learnedOn?: string } {
     lastSeen: typeof r.lastSeen === 'number' ? r.lastSeen : undefined,
     leech: r.leech === true || undefined,
     lapsesAtUnmark: count(r.lapsesAtUnmark),
+    fsrs: normalizeFsrs(r.fsrs),
     // Legacy single schedules kept the learned date here.
     learnedOn: isValidDateStr(r.learnedOn) ? r.learnedOn : undefined,
   };

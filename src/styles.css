@@ -2946,3 +2946,61 @@ body.in-session .view-switch {
 .sentence-status {
   margin-left: auto;
 }
+
+/* ---------- Practice home ---------- */
+.practice-hero {
+  text-align: center;
+}
+.practice-sub {
+  margin: 8px 0 4px;
+}
+.balance-hint {
+  margin: 8px 0 12px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 0.9rem;
+}
+.balance-hint.refresh {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.balance-hint.good {
+  background: var(--good-soft);
+  color: var(--good);
+}
+.practice-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: left;
+}
+.exercise-settings summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.strength-bar {
+  display: flex;
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--surface-2);
+  margin: 8px 0;
+}
+.strength-bar > .weak {
+  background: var(--bad);
+}
+.strength-bar > .medium {
+  background: var(--warn);
+}
+.strength-bar > .strong {
+  background: var(--good);
+}
+.stat-value.strength-weak {
+  color: var(--bad);
+}
+.stat-value.strength-medium {
+  color: var(--warn);
+}
+.stat-value.strength-strong {
+  color: var(--good);
+}

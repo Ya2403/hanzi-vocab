@@ -59,7 +59,7 @@ export function LearnSession({
   onFinish?(): void;
   finishLabel?: string;
 }) {
-  const { words, updateWords, recordReview } = useStore();
+  const { words, updateWords, recordReview, completeSession } = useStore();
   const { learnBatchSize, learnDailyLimit, learnTyping } = useSettings();
   // "Can't listen now" (here or recently): no listening round.
   const [listenOff, setListenOff] = useState(isQuiet);
@@ -78,6 +78,7 @@ export function LearnSession({
   const [misses, setMisses] = useState(0);
   const [answered, setAnswered] = useState(0);
   // Answers while learning, per word and skill; saved with the word when its batch is learned.
+  const sessionCounted = useRef(false);
   const stats = useRef(new Map<string, Partial<Record<Skill, SkillStats>>>());
 
   // Full-screen like other sessions.
@@ -149,7 +150,7 @@ export function LearnSession({
   const finishBatch = () => {
     const on = today();
     // Keep the answer statistics gathered while learning.
-    const done = batch.map((w) => ({ ...liveWord(w), skills: learnedSkills(w, stats.current.get(w.id), on), learnedOn: on }));
+    const done = batch.map((w) => ({ ...liveWord(w), skills: learnedSkills(w, stats.current.get(w.id)), learnedOn: on }));
     updateWords(done).catch((e) => console.error('Failed to save learned words', e));
     setLearned((l) => [...l, ...done]);
     setRemaining((rem) => {
@@ -192,13 +193,17 @@ export function LearnSession({
   }
 
   if (stage.kind === 'summary') {
+    if (learned.length && !sessionCounted.current) {
+      sessionCounted.current = true;
+      completeSession().catch(() => {});
+    }
     const limitReached = allowance === 0 && remaining.size > 0;
     return (
       <div className="summary card">
         <div className="summary-score">{learned.length}</div>
         <h2>{learned.length === 1 ? 'word learned' : 'words learned'}</h2>
         <p className="muted">
-          {learned.length ? 'First review: tomorrow, in the Review tab.' : 'Nothing new to learn here.'}
+          {learned.length ? 'They now come up in Practice.' : 'Nothing new to learn here.'}
           {answered > 0 && ` ${answered} answers, ${misses} missed and repeated.`}
         </p>
         {limitReached && <p className="hint">Daily limit reached ({learnDailyLimit} new words). Change it in the Learn settings.</p>}

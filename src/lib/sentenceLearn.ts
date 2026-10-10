@@ -1,26 +1,17 @@
 /**
- * Learning sentences: when a sentence or dialogue is ready to learn, the learn groups (dialogues,
- * and loose sentences per tag), and the exercise material (translation options, word tiles,
- * dialogue replies). Pure functions (randomness passed in) so they can be unit-tested.
+ * Sentences as reading and review material for words: which sentences are readable (all
+ * their words learned), groups (dialogues, and loose sentences per tag), and the material
+ * for sentence exercises (translation options, word tiles, dialogue replies, blanks).
+ * Sentences themselves are not scheduled. Pure functions (randomness passed in), unit-tested.
  */
-import { addDays, today } from './date';
 import { isLearned } from './srs';
 import { segment, type Links } from './sentences';
-import type { Dialogue, Sentence, SentenceSkills, Word } from './types';
+import type { Dialogue, Sentence, Word } from './types';
 
-export const isSentenceLearned = (s: Sentence): boolean => !!s.skills?.understand;
-export const isSentenceNew = (s: Sentence): boolean => !isSentenceLearned(s);
-/** Only sentences with a translation can be learned (every exercise needs one). */
-export const canLearn = (s: Sentence): boolean => isSentenceNew(s) && !!s.translation.trim();
-
-export const sentencesLearnedToday = (sentences: Sentence[], on: string = today()) => sentences.filter((s) => s.learnedOn === on).length;
-
-export type SkillStats = { answered?: number; correct?: number; recent?: string; lastSeen?: number };
-
-/** Skills of a sentence just learned: first reviews tomorrow, keeping the answers given while learning. */
-export function learnedSentenceSkills(stats: Partial<Record<'understand' | 'produce', SkillStats>> = {}, on: string = today()): SentenceSkills {
-  const base = { ease: 2.5, interval: 1, reps: 1, lapses: 0, due: addDays(on, 1), lastReviewed: on };
-  return { understand: { ...base, ...stats.understand }, produce: { ...base, ...stats.produce } };
+/** Readable: it links to at least one of your words, and all of them are learned. */
+export function isReadable(s: Sentence, links: Links): boolean {
+  const words = links.bySentence.get(s.id) ?? [];
+  return words.length > 0 && words.every(isLearned);
 }
 
 // ---------- Readiness ----------
@@ -167,29 +158,32 @@ export function responseOptions(lines: Sentence[], i: number, n: number, rnd: ()
   return pickN([right, ...pickN(others, n - 1, rnd)], Math.min(n, others.length + 1), rnd);
 }
 
-// ---------- Continue ----------
+// ---------- Fill the blank ----------
 
-export interface SentencePlan {
-  group: LearnGroup;
-  /** What to learn: a dialogue's translated lines, or loose sentences up to what's left today. */
-  sentences: Sentence[];
-  isDialogue: boolean;
+/** Learned words of the sentence that appear in it as written (candidates for the blank). */
+export const clozeCandidates = (s: Sentence, linked: Word[]): Word[] => linked.filter((w) => isLearned(w) && w.hanzi.trim() && s.zh.includes(w.hanzi.trim()));
+
+/** The word to blank: preferably a longer one (more to recall), with some variety. */
+export function clozeTarget(s: Sentence, linked: Word[], rnd: () => number = Math.random): Word | null {
+  const list = clozeCandidates(s, linked);
+  if (!list.length) return null;
+  const scored = list.map((w) => ({ w, score: [...w.hanzi].length + rnd() * 1.5 })).sort((a, b) => b.score - a.score);
+  return scored[0].w;
 }
 
-/**
- * The first group of new sentences that is ready and fits today's limit (a dialogue is learned
- * whole: its new lines must fit what's left, unless nothing was learned today).
- */
-export function nextReadyGroup(groups: LearnGroup[], links: Links, percent: number, allowance: number, doneToday: number): SentencePlan | null {
-  if (allowance <= 0) return null;
-  for (const g of groups) {
-    const fresh = g.sentences.filter(canLearn);
-    if (!fresh.length || !readiness(fresh, links, percent).ready) continue;
-    if (g.dialogue) {
-      if (fresh.length > allowance && doneToday > 0) continue;
-      return { group: g, sentences: g.sentences.filter((s) => s.translation.trim()), isDialogue: true };
-    }
-    return { group: g, sentences: fresh.slice(0, allowance), isDialogue: false };
+/** Four options: the blanked word plus learned words of similar length that don't appear in the sentence. */
+export function clozeOptions(target: Word, s: Sentence, pool: Word[], n = 4, rnd: () => number = Math.random): Word[] {
+  const len = [...target.hanzi].length;
+  const others = pool
+    .filter((w) => w.id !== target.id && isLearned(w) && w.hanzi !== target.hanzi && !s.zh.includes(w.hanzi))
+    .map((w) => ({ w, score: Math.abs([...w.hanzi].length - len) + rnd() * 1.2 }))
+    .sort((a, b) => a.score - b.score)
+    .slice(0, n - 1)
+    .map((x) => x.w);
+  const all = [target, ...others];
+  for (let i = all.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [all[i], all[j]] = [all[j], all[i]];
   }
-  return null;
+  return all;
 }

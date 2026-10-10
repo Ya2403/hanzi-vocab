@@ -1,34 +1,30 @@
 import { useEffect, useState } from 'react';
 import { useStore } from './store';
 import { today } from './lib/date';
-import { useSettings } from './lib/settings';
 import { QuietBadge } from './components/QuietBadge';
-import { reviewCount } from './lib/planner';
-import { sentenceReviewCount } from './lib/sentenceReview';
 import { liveStreak } from './lib/streak';
 import { Icon, type IconName } from './components/Icon';
 import { WordsScreen } from './screens/WordsScreen';
-import { ReviewScreen } from './screens/ReviewScreen';
 import { PracticeScreen } from './screens/PracticeScreen';
 import { DataScreen } from './screens/DataScreen';
 import { LearnScreen } from './screens/LearnScreen';
 
 const tabs: { id: Tab; label: string; icon: IconName }[] = [
-  { id: 'words', label: 'Words', icon: 'list' },
   { id: 'learn', label: 'Learn', icon: 'learn' },
-  { id: 'review', label: 'Review', icon: 'review' },
   { id: 'practice', label: 'Practice', icon: 'cards' },
+  { id: 'words', label: 'Words', icon: 'list' },
   { id: 'data', label: 'Stats', icon: 'data' },
 ];
-type Tab = 'words' | 'learn' | 'review' | 'practice' | 'data';
+type Tab = 'words' | 'learn' | 'practice' | 'data';
 
+/** Practice is the home tab; the old #review link opens it too. */
 const tabFromHash = (): Tab => {
   const h = location.hash.slice(1).split('?')[0];
-  return tabs.some((t) => t.id === h) ? (h as Tab) : 'review';
+  return tabs.some((t) => t.id === h) ? (h as Tab) : 'practice';
 };
 
 export default function App() {
-  const { words, streak, error, sentences } = useStore();
+  const { streak, error } = useStore();
   const [tab, setTab] = useState<Tab>(tabFromHash);
 
   useEffect(() => {
@@ -43,11 +39,7 @@ export default function App() {
     window.scrollTo(0, 0);
   };
 
-  // Re-render when settings change ("Writing practice" changes what is due).
-  useSettings();
   const on = today();
-  // New words are taught in Learn, so they never count as due for Review.
-  const dueCount = reviewCount(words, on) + sentenceReviewCount(sentences, on);
   const streakDays = liveStreak(streak, on);
   const doneToday = streak.lastDate === on;
 
@@ -61,14 +53,11 @@ export default function App() {
         <div className="top-stats">
           <span
             className={`pill streak ${doneToday ? 'lit' : ''}`}
-            title={doneToday ? 'Streak extended today' : streakDays ? 'Answer a card today to keep your streak' : 'Answer a card to start a streak'}
+            title={doneToday ? 'Streak extended today' : streakDays ? 'Finish a practice session today to keep your streak' : 'Finish a practice session to start a streak'}
           >
             🔥 {streakDays}
           </span>
           <QuietBadge />
-          <button className={`pill due ${dueCount ? 'has-due' : ''}`} onClick={() => go('review')}>
-            {dueCount} due
-          </button>
         </div>
       </header>
 
@@ -76,8 +65,7 @@ export default function App() {
         {error && <p className="hint error card">{error}</p>}
         {tab === 'words' && <WordsScreen />}
         {tab === 'learn' && <LearnScreen onGoToWords={() => go('words')} />}
-        {tab === 'review' && <ReviewScreen onGoToWords={() => go('words')} onGoToLearn={() => go('learn')} />}
-        {tab === 'practice' && <PracticeScreen />}
+        {tab === 'practice' && <PracticeScreen onGoToLearn={() => go('learn')} onGoToWords={() => go('words')} />}
         {tab === 'data' && <DataScreen />}
       </main>
 
@@ -86,7 +74,6 @@ export default function App() {
           <button key={t.id} className={tab === t.id ? 'active' : ''} onClick={() => go(t.id)} aria-current={tab === t.id ? 'page' : undefined}>
             <Icon name={t.icon} size={22} />
             <span>{t.label}</span>
-            {t.id === 'review' && dueCount > 0 && <span className="dot">{dueCount > 99 ? '99+' : dueCount}</span>}
           </button>
         ))}
       </nav>

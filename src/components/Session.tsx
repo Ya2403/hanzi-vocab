@@ -1,12 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../store';
-import { cardsFor, DELAYED_RECALL, orderSteps, practiceCard, retryOf, reviewCards, testedSkills, type SessionMode, type Step } from '../lib/planner';
-import { activeSkills, Grade, isLearned, practiceMiss, recordAnswer, reviewWithLeech, SKILL_LABEL, skillState } from '../lib/srs';
-import { shuffle } from '../lib/words';
-import type { Direction, Sentence, SentenceSkill, Skill, Skills, Word } from '../lib/types';
-import { isSentenceStep, sentencePracticeStep, sentenceRetry, sentenceReviewSteps, sentenceSkillState, sentenceNextDue, type SentenceStep } from '../lib/sentenceReview';
-import { SentenceCard, useSentenceWorld } from './SentenceCard';
-import { applyReview } from '../lib/srs';
+import { cardsFor, DELAYED_RECALL, practiceCard, retryOf, spreadSteps, testedSkills, type SessionMode, type Step } from '../lib/planner';
+import { activeSkills, Grade, isLearned, recordAnswer, reviewWithLeech, SKILL_LABEL, skillState } from '../lib/srs';
+import type { Direction, Skill, Skills, Word } from '../lib/types';
 import { Flashcard } from './Flashcard';
 import { MultipleChoice } from './MultipleChoice';
 import { WritingFlow } from './WritingFlow';
@@ -24,57 +20,37 @@ export type { SessionMode } from '../lib/planner';
 
 interface Props {
   title: string;
+  /** One card per word, in this order. */
   words: Word[];
   mode: SessionMode;
-  /** Practice only: which way cards go in manual mode (Review follows each due skill). */
+  /** Manual mode: which way cards go. */
   direction: Direction;
-  /** Review: cards for the due skills, answers update their SM-2 schedules. Practice: one card per word, only misses change the schedule. */
-  updateSchedule: boolean;
+  /** Automatic mode: the skill to test per word (its highest-priority one), else picked here. */
+  skillFor?: Map<string, Skill>;
+  /** Test this skill on every word (e.g. pinyin for "Tones to practice"). */
+  skill?: Skill;
   /** Leave early (✕). */
   onExit(): void;
-  /** The summary's main button; defaults to onExit. Used to chain Review → Learn → Done. */
+  /** "Done" at the end; defaults to onExit. */
   onFinish?(): void;
-  finishLabel?: string;
-  /** Practice: test this skill on every word (e.g. pinyin for "Tones to practice"). */
-  skill?: Skill;
-  /** Sentences in this session (Review: their due skills, after the words; Practice: one card each). */
-  sentences?: Sentence[];
+  /** "Another round" at the end (a new session). */
+  onAnotherRound?(): void;
 }
-
-type Item = Step | SentenceStep;
 
 type Grades = Partial<Record<Skill, number>>;
 
 const skillKey = (id: string, k: Skill) => `${id}|${k}`;
-const stepKey = (s: Item) => (isSentenceStep(s) ? `${s.id}|s|${s.skill}|${s.ex}` : `${s.id}|${s.card.kind}|${testedSkills(s.card).join(',')}`);
-
-/** Mix sentence cards evenly into word cards (Practice). */
-function interleave<A, B>(a: A[], b: B[]): (A | B)[] {
-  if (!b.length) return a;
-  const out: (A | B)[] = [];
-  const every = Math.max(1, Math.round((a.length + b.length) / b.length));
-  let i = 0;
-  let j = 0;
-  while (i < a.length || j < b.length) {
-    if (j < b.length && (out.length + 1) % every === 0) out.push(b[j++]);
-    else if (i < a.length) out.push(a[i++]);
-    else out.push(b[j++]);
-  }
-  return out;
-}
 
 /** Words per Match-pairs round. */
 const MATCH_BATCH = 5;
 
 /**
- * Runs through a set of cards. Each card tests one or more skills of a word; only the first
- * answer to a skill in a session changes its schedule, and only for the card's scheduled
- * skills (Review: the due ones). Cards with a miss go to the back of the queue as an easier
- * card until they're right. Every answer counts toward the skill's accuracy.
+ * A practice session: one card per word. Every answer counts toward accuracy; the first answer
+ * to each skill in the session also updates its FSRS card. A missed card comes back once, later,
+ * as an easier card (so a word appears at most twice). The end shows a short summary.
  */
-export function Session({ title, words: initialWords, mode, direction, updateSchedule: initialUpdate, onExit, onFinish, finishLabel, skill, sentences: initialSentences = [] }: Props) {
-  const { words: allWords, sentences: allSentences, updateWord, updateSentences, recordReview } = useStore();
-  const world = useSentenceWorld();
+export function Session({ title, words: initialWords, mode, direction, skillFor, skill, onExit, onFinish, onAnotherRound }: Props) {
+  const { words: allWords, updateWord, recordReview, completeSession } = useStore();
   const { writingStyle, leechThreshold, showPinyin, choiceStyle } = useSettings();
 
   // Full-screen practice: the app header is hidden while a session is open (see .in-session in CSS).
@@ -89,52 +65,48 @@ export function Session({ title, words: initialWords, mode, direction, updateSch
   const planOpts = { mode, listening: listeningAvailable && !isQuiet(), choiceStyle };
 
   const [leech, setLeech] = useState<{ id: string; lapses: number; skill: Skill } | null>(null);
-  const [pool, setPool] = useState(initialWords);
-  const [updateSchedule, setUpdateSchedule] = useState(initialUpdate);
-  const [queue, setQueue] = useState<Item[]>(() => {
-    if (initialUpdate) {
-      // Due words first, then due sentences (most overdue first).
-      const wordSteps = orderSteps(reviewCards(initialWords, planOpts), new Map(initialWords.map((w) => [w.id, w])));
-      const byDue = [...initialSentences].sort((a, b) => (sentenceNextDue(a) ?? '').localeCompare(sentenceNextDue(b) ?? ''));
-      return [...wordSteps, ...sentenceReviewSteps(byDue, world.contextOf)];
-    }
-    const wordSteps: Step[] = initialWords.map((w) =>
-          skill === 'pinyin'
-            ? // Tone practice: type the pinyin, so the tones are really checked.
-              { id: w.id, card: { kind: 'single', skill, ex: 'typing', dir: 'zh-py' }, scheduled: [skill] }
-            : skill
+  const [queue, setQueue] = useState<Step[]>(() =>
+    spreadSteps(
+      initialWords.map((w): Step =>
+        skill === 'pinyin'
+          ? // Tone practice: type the pinyin, so the tones are really checked.
+            { id: w.id, card: { kind: 'single', skill, ex: 'typing', dir: 'zh-py' }, scheduled: [skill] }
+          : skill
             ? { ...cardsFor(w, [skill], planOpts)[0], scheduled: [skill] }
-            : practiceCard(w, direction, planOpts),
-    );
-    return interleave(wordSteps, shuffle(initialSentences).map((x) => sentencePracticeStep(x, world.contextOf(x))));
-  });
-  const [sentencePool, setSentencePool] = useState(initialSentences);
+            : practiceCard(w, direction, { ...planOpts, skill: skillFor?.get(w.id) }),
+      ),
+    ),
+  );
   const [total, setTotal] = useState(() => queue.length);
   /** First answer per word|skill this session. */
   const [results, setResults] = useState<Map<string, number>>(new Map());
+  /** Words already given their one retry. */
   const [retried, setRetried] = useState<Set<string>>(new Set());
+  const [answeredCards, setAnsweredCards] = useState(0);
   const [step, setStep] = useState(0);
 
-  const byId = useMemo(() => new Map(pool.map((w) => [w.id, w])), [pool]);
+  const byId = useMemo(() => new Map(initialWords.map((w) => [w.id, w])), [initialWords]);
   const liveById = useMemo(() => new Map(allWords.map((w) => [w.id, w])), [allWords]);
   const learnedPool = useMemo(() => allWords.filter(isLearned), [allWords]);
-  const item = queue[0];
-  const current = item && !isSentenceStep(item) ? item : undefined;
-  const sStep = isSentenceStep(item) ? item : undefined;
+  const current = queue[0];
   // Prefer the stored version, so edits made mid-session (e.g. a note from the leech prompt) show up.
   const wordOf = (id: string) => liveById.get(id) ?? byId.get(id);
-  const liveSentences = useMemo(() => new Map(allSentences.map((x) => [x.id, x])), [allSentences]);
-  const sentenceOf = (id: string) => liveSentences.get(id) ?? sentencePool.find((x) => x.id === id);
   const word = current && wordOf(current.id);
-  const sentence = sStep && sentenceOf(sStep.id);
-  // A missed card is replaced by its retry, so every queued card is one still to get right.
   const done = total - queue.length;
 
+  // A finished session counts for the streak (once).
+  const counted = useRef(false);
+  useEffect(() => {
+    if (!current && answeredCards > 0 && !counted.current) {
+      counted.current = true;
+      completeSession().catch(() => {});
+    }
+  }, [current, answeredCards]);
+
   /**
-   * Save one card's answers in a single write. Scheduled skills change their schedule on
-   * their first answer this session (Review: SM-2; Practice: a miss brings the review
-   * forward); every tested skill records accuracy. Skills the word isn't reviewed on (e.g.
-   * writing while it's off) only count for the streak.
+   * Save one card's answers in a single write: the first answer to each tested skill this
+   * session updates its FSRS card (and can flag a leech); every answer records accuracy.
+   * Skills the word isn't reviewed on (e.g. hidden writing) aren't touched.
    */
   const gradeCard = (w: Word, s: Step, grades: Grades, toneError = false, fresh = results) => {
     recordReview().catch(() => {});
@@ -148,12 +120,10 @@ export function Session({ title, words: initialWords, mode, direction, updateSch
       let st = skillState(w, k);
       if (!fresh.has(key)) {
         firsts.set(key, q);
-        if (s.scheduled.includes(k)) {
-          const r = updateSchedule ? reviewWithLeech(st, q, leechThreshold) : q < 3 ? practiceMiss(st, leechThreshold) : null;
-          if (r) {
-            st = r.srs;
-            if (r.becameLeech) becameLeech = { lapses: st.lapses, skill: k };
-          }
+        if (s.scheduled.includes(k) && !s.delayed) {
+          const r = reviewWithLeech(st, q, leechThreshold);
+          st = r.srs;
+          if (r.becameLeech) becameLeech = { lapses: st.lapses, skill: k };
         }
       }
       skills[k] = recordAnswer(st, q >= 3);
@@ -165,51 +135,34 @@ export function Session({ title, words: initialWords, mode, direction, updateSch
     return firsts;
   };
 
+  /** A missed word comes back once, later, as an easier card. */
+  const requeue = (missed: Step[]) => {
+    const again = missed.filter((s) => !retried.has(s.id));
+    if (again.length) setRetried((r) => new Set([...r, ...again.map((s) => s.id)]));
+    return again.map(retryOf);
+  };
+
   const answer = (grades: Grades, toneError = false) => {
     if (!current || !word) return;
     gradeCard(word, current, grades, toneError);
+    setAnsweredCards((n) => n + 1);
     const c = current.card;
     if (c.kind === 'single' && c.ex === 'writing') {
       // Writing doesn't repeat right away: it comes back once, blank, 3–5 cards later
       // (if the session still has that many cards).
       setQueue(([head, ...rest]) => {
-        if ((head as Step).delayed || rest.length < DELAYED_RECALL.min) return rest;
+        if (head.delayed || rest.length < DELAYED_RECALL.min) return rest;
         const at = Math.min(rest.length, DELAYED_RECALL.min + Math.floor(Math.random() * (DELAYED_RECALL.max - DELAYED_RECALL.min + 1)));
-        return [...rest.slice(0, at), { ...(head as Step), delayed: true, scheduled: [] }, ...rest.slice(at)];
+        return [...rest.slice(0, at), { ...head, delayed: true, scheduled: [] }, ...rest.slice(at)];
       });
-      if (!current.delayed && queue.length - 1 >= DELAYED_RECALL.min) setTotal((t) => t + 1);
       setStep((s) => s + 1);
       return;
     }
     const missed = Object.values(grades).some((q) => q! < 3);
-    if (missed) setRetried((r) => new Set(r).add(stepKey(retryOf(current))));
-    setQueue(([head, ...rest]) => (missed ? [...rest, retryOf(head as Step)] : rest));
+    const retry = missed ? requeue([current]) : [];
+    if (retry.length) setTotal((t) => t + 1);
+    setQueue(([, ...rest]) => [...rest, ...retry]);
     setStep((s) => s + 1);
-  };
-
-  /**
-   * A sentence card: the first answer to a skill this session changes its schedule (Review:
-   * SM-2; Practice: a miss brings it forward); every answer counts toward its accuracy. A miss
-   * comes back later as the easy exercise for that skill.
-   */
-  const answerSentence = (q: number) => {
-    if (!sStep || !sentence) return;
-    recordReview().catch(() => {});
-    const key = skillKey(sentence.id, sStep.skill as unknown as Skill);
-    let st = sentenceSkillState(sentence, sStep.skill);
-    if (!results.has(key)) {
-      setResults((r) => new Map(r).set(key, q));
-      if (sStep.scheduled) {
-        if (updateSchedule) st = applyReview(st, q);
-        else if (q < 3) st = practiceMiss(st, Number.MAX_SAFE_INTEGER).srs;
-      }
-    }
-    st = recordAnswer(st, q >= 3);
-    updateSentences([{ ...sentence, skills: { ...sentence.skills, [sStep.skill]: st } }]).catch((e) => console.error('Failed to save answer', e));
-    const ctx = world.contextOf(sentence);
-    if (q < 3) setRetried((r) => new Set(r).add(stepKey(sentenceRetry(sStep, ctx))));
-    setQueue(([head, ...rest]) => (q < 3 ? [...rest, sentenceRetry(head as SentenceStep, ctx)] : rest));
-    setStep((x) => x + 1);
   };
   /** A card that tests one skill. */
   const answerOne = (k: Skill) => (q: number, toneError?: boolean) => answer({ [k]: q }, toneError);
@@ -219,10 +172,7 @@ export function Session({ title, words: initialWords, mode, direction, updateSch
     const c = current?.card;
     if (!(mode === 'choice' && choiceStyle === 'match' && c?.kind === 'single' && c.ex === 'choice')) return [];
     const seen = new Set<string>();
-    return queue
-      .filter((s): s is Step => !isSentenceStep(s))
-      .filter((s) => s.card.kind === 'single' && s.card.ex === 'choice' && s.card.dir === c.dir && !seen.has(s.id) && seen.add(s.id))
-      .slice(0, MATCH_BATCH);
+    return queue.filter((s) => s.card.kind === 'single' && s.card.ex === 'choice' && s.card.dir === c.dir && !seen.has(s.id) && seen.add(s.id)).slice(0, MATCH_BATCH);
   }, [mode, choiceStyle, current, queue]);
   const matchRound = matchSteps.length > 1;
   const answerBatch = (list: { id: string; quality: number }[]) => {
@@ -234,25 +184,18 @@ export function Session({ title, words: initialWords, mode, direction, updateSch
       const firsts = gradeCard(w, s, { [s.card.skill]: q.get(s.id) ?? Grade.Again }, false, seen);
       seen = new Map([...seen, ...firsts]);
     }
-    const inRound = new Set<Item>(matchSteps);
-    setQueue((qu) => [...qu.filter((s) => !inRound.has(s)), ...matchSteps.filter((s) => (q.get(s.id) ?? 0) < 3)]);
+    setAnsweredCards((n) => n + matchSteps.length);
+    const inRound = new Set(matchSteps);
+    const retry = requeue(matchSteps.filter((s) => (q.get(s.id) ?? 0) < 3));
+    if (retry.length) setTotal((t) => t + retry.length);
+    setQueue((qu) => [...qu.filter((s) => !inRound.has(s)), ...retry]);
     setStep((s) => s + 1);
   };
 
   /** "Can't listen now": skip this card ungraded and swap any other listening cards for multiple choice. */
   const cantListen = () => {
     startQuiet();
-    setQueue(([, ...rest]) =>
-      rest.map((s): Item =>
-        isSentenceStep(s)
-          ? s.ex === 'listen'
-            ? { ...s, ex: 'translate' }
-            : s
-          : s.card.kind === 'single' && s.card.ex === 'listen'
-            ? { ...s, card: { ...s.card, ex: 'choice' } }
-            : s,
-      ),
-    );
+    setQueue(([, ...rest]) => rest.map((s) => (s.card.kind === 'single' && s.card.ex === 'listen' ? { ...s, card: { ...s.card, ex: 'choice' as const } } : s)));
     setTotal((t) => t - 1);
     setStep((s) => s + 1);
   };
@@ -263,58 +206,25 @@ export function Session({ title, words: initialWords, mode, direction, updateSch
     setStep((s) => s + 1);
   };
 
-  /** Practice missed: one card per word for the skills missed; accuracy only, no schedule changes. */
-  const missedSteps = (): Item[] => {
-    const bySkill = new Map<string, Skill[]>();
-    const sentenceSteps: SentenceStep[] = [];
-    for (const [key, q] of results) {
-      if (q >= 3) continue;
-      const [id, k] = key.split('|') as [string, Skill];
-      const sen = sentenceOf(id);
-      if (sen) {
-        const base: SentenceStep = { type: 'sentence', id, skill: k as unknown as SentenceSkill, ex: 'translate', scheduled: false };
-        sentenceSteps.push(sentenceRetry(base, world.contextOf(sen)));
-      } else bySkill.set(id, [...(bySkill.get(id) ?? []), k]);
-    }
-    const wordSteps = [...bySkill].flatMap(([id, skills]) => {
-      const w = wordOf(id);
-      return w ? cardsFor(w, skills, planOpts).map((s) => ({ ...s, scheduled: [] })) : [];
-    });
-    return [...wordSteps, ...sentenceSteps];
-  };
-
-  const restartWith = (steps: Item[]) => {
-    const shuffled = shuffle(steps);
-    setPool([...new Set(shuffled.filter((s) => !isSentenceStep(s)).map((s) => s.id))].map((id) => wordOf(id)!).filter(Boolean));
-    setSentencePool([...new Set(shuffled.filter(isSentenceStep).map((s) => s.id))].map((id) => sentenceOf(id)!).filter(Boolean));
-    setUpdateSchedule(false);
-    setQueue(shuffled);
-    setTotal(shuffled.length);
-    setResults(new Map());
-    setRetried(new Set());
-  };
-
   // Rendered on top of whatever is showing (the next card, or the summary after the last one).
   const leechPrompt = leech && <LeechPrompt wordId={leech.id} lapses={leech.lapses} skill={SKILL_LABEL[leech.skill]} onClose={() => setLeech(null)} />;
 
-  if (!word && !sentence) {
+  if (!current || !word) {
     const graded = [...results.values()];
     const firstTry = graded.filter((q) => q >= 3).length;
     const missedIds = new Set([...results].filter(([, q]) => q < 3).map(([k]) => k.split('|')[0]));
     const missed = [...missedIds].map(wordOf).filter((w): w is Word => !!w);
-    const missedSentences = [...missedIds].map(sentenceOf).filter((x): x is Sentence => !!x);
     const pct = graded.length ? Math.round((firstTry / graded.length) * 100) : 0;
     return (
       <div className="summary card">
         <div className="summary-score">{pct}%</div>
         <h2>Session complete</h2>
         <p className="muted">
-          {firstTry} of {graded.length} answers right on the first try
-          {updateSchedule || initialUpdate ? ' · schedule updated' : missed.length ? ' · missed words come back in Review tomorrow' : ''}
+          {answeredCards} exercise{answeredCards === 1 ? '' : 's'} · {pct}% right on the first try
         </p>
-        {missed.length + missedSentences.length > 0 && (
+        {missed.length > 0 && (
           <>
-            <h3>To work on</h3>
+            <h3>Needs attention</h3>
             <ul className="missed">
               {missed.map((w) => (
                 <li key={w.id}>
@@ -323,23 +233,17 @@ export function Session({ title, words: initialWords, mode, direction, updateSch
                   <span className="meaning">{w.meaning}</span>
                 </li>
               ))}
-              {missedSentences.map((x) => (
-                <li key={x.id}>
-                  <span className="hanzi" lang="zh-CN">{x.zh}</span>
-                  <span className="meaning">{x.translation}</span>
-                </li>
-              ))}
             </ul>
           </>
         )}
         <div className="row center">
-          {missed.length + missedSentences.length > 0 && (
-            <button className="btn" onClick={() => restartWith(missedSteps())}>
-              Practice missed
+          {onAnotherRound && (
+            <button className="btn" onClick={onAnotherRound}>
+              Another round
             </button>
           )}
           <button className="btn primary" onClick={onFinish ?? onExit} autoFocus>
-            {finishLabel ?? 'Done'}
+            Done
           </button>
         </div>
         {leechPrompt}
@@ -347,8 +251,28 @@ export function Session({ title, words: initialWords, mode, direction, updateSch
     );
   }
 
-  const sessionBar = (label: string) => (
-    <>
+  const choicePool = learnedPool.length >= 4 ? learnedPool : allWords;
+  const c = current.card;
+  const writingCard = (onAnswer: (q: number) => void) => (
+    <WritingFlow key={`${writingStyle}-${step}`} word={word} onAnswer={onAnswer} onSkip={skip} blankOnly={current.delayed} />
+  );
+
+  let card;
+  if (matchRound) {
+    const batch = matchSteps.map((s) => wordOf(s.id)).filter((w): w is Word => !!w);
+    card = <MatchPairs key={step} words={batch} direction={c.kind === 'single' ? c.dir : 'zh-en'} onDone={answerBatch} />;
+  } else if (c.kind === 'pair') {
+    card = <TwoStepCard key={step} word={word} pool={choicePool} pinyinEx={c.p} onDone={(r) => answer({ meaning: r.meaning, pinyin: r.pinyin }, r.toneError)} />;
+  } else if (c.kind === 'flash') card = <Flashcard key={step} word={word} direction={c.dir} skills={c.skills} onAnswer={answer} />;
+  else if (c.ex === 'writing') card = writingCard(answerOne(c.skill));
+  else if (c.ex === 'listen') card = <ListenChoice key={step} word={word} pool={choicePool} onAnswer={answerOne('pinyin')} onCantListen={cantListen} />;
+  else if (c.ex === 'typing') card = <Typing key={step} word={word} direction={c.dir} onAnswer={answerOne(c.skill)} />;
+  else card = <MultipleChoice key={step} word={word} allWords={choicePool} direction={c.dir} onAnswer={answerOne(c.skill)} />;
+
+  const label = matchRound ? 'match pairs' : testedSkills(c).map((k) => SKILL_LABEL[k].toLowerCase()).join(' + ');
+
+  return (
+    <div className="session">
       <div className="session-bar">
         <button className="icon-btn" onClick={onExit} aria-label="End session" title="End session">
           <Icon name="close" />
@@ -372,53 +296,9 @@ export function Session({ title, words: initialWords, mode, direction, updateSch
       {leechPrompt}
       <div className="session-title muted small">
         {title} · {label}
-        {current?.delayed && ' · recall'}
-        {item && retried.has(stepKey(item)) && ' · retry'}
+        {current.delayed && ' · recall'}
+        {retried.has(current.id) && results.has(skillKey(current.id, testedSkills(c)[0])) && ' · again'}
       </div>
-    </>
-  );
-
-  if (sStep && sentence) {
-    return (
-      <div className="session">
-        {sessionBar(`sentence · ${sStep.skill}`)}
-        <SentenceCard key={step} step={sStep} sentence={sentence} onAnswer={answerSentence} onCantListen={cantListen} />
-      </div>
-    );
-  }
-  if (!current || !word) return null;
-
-  const choicePool = learnedPool.length >= 4 ? learnedPool : allWords;
-  const c = current.card;
-  const writingCard = (onAnswer: (q: number) => void) => (
-    <WritingFlow key={`${writingStyle}-${step}`} word={word} onAnswer={onAnswer} onSkip={skip} blankOnly={current.delayed} />
-  );
-
-  let card;
-  if (matchRound) {
-    const batch = matchSteps.map((s) => wordOf(s.id)).filter((w): w is Word => !!w);
-    card = <MatchPairs key={step} words={batch} direction={c.kind === 'single' ? c.dir : 'zh-en'} onDone={answerBatch} />;
-  } else if (c.kind === 'pair') {
-    card = (
-      <TwoStepCard
-        key={step}
-        word={word}
-        pool={choicePool}
-        pinyinEx={c.p}
-        onDone={(r) => answer({ meaning: r.meaning, pinyin: r.pinyin }, r.toneError)}
-      />
-    );
-  } else if (c.kind === 'flash') card = <Flashcard key={step} word={word} direction={c.dir} skills={c.skills} onAnswer={answer} />;
-  else if (c.ex === 'writing') card = writingCard(answerOne(c.skill));
-  else if (c.ex === 'listen') card = <ListenChoice key={step} word={word} pool={choicePool} onAnswer={answerOne('pinyin')} onCantListen={cantListen} />;
-  else if (c.ex === 'typing') card = <Typing key={step} word={word} direction={c.dir} onAnswer={answerOne(c.skill)} />;
-  else card = <MultipleChoice key={step} word={word} allWords={choicePool} direction={c.dir} onAnswer={answerOne(c.skill)} />;
-
-  const label = matchRound ? 'match pairs' : testedSkills(c).map((k) => SKILL_LABEL[k].toLowerCase()).join(' + ');
-
-  return (
-    <div className="session">
-      {sessionBar(label)}
       {card}
     </div>
   );

@@ -1,14 +1,15 @@
 /**
- * The study planner: how strong each skill of a learned word is, which exercise a card gets,
- * how review cards are ordered, and which words Practice should pick. Pure functions
- * (randomness is passed in) so they can be unit-tested.
+ * The study planner: how strong each skill of a learned word is, how much it needs practice
+ * (priority), which exercise a card gets, and which words a Practice session includes. Pure
+ * functions (randomness and time are passed in) so they can be unit-tested.
  */
 import { diffDays, today } from './date';
+import { retrievability, stability } from './fsrs';
 import { isRadicalOnly } from './learn';
-import { accuracy, activeSkills, dueSkills, isLearned, SKILL_DIR, skillState } from './srs';
+import { accuracy, activeSkills, isLearned, SKILL_DIR, skillState } from './srs';
 import type { CardDirection, Direction, PracticeMode, Skill, SkillState, Word } from './types';
 
-export type Strength = 'weak' | 'medium' | 'strong' | 'veryStrong';
+export type Strength = 'weak' | 'medium' | 'strong';
 export type Exercise = 'choice' | 'listen' | 'typing' | 'writing';
 
 export interface PlannedCard {
@@ -16,30 +17,36 @@ export interface PlannedCard {
   dir: CardDirection;
 }
 
-const STRENGTH_RANK: Record<Strength, number> = { weak: 0, medium: 1, strong: 2, veryStrong: 3 };
+const STRENGTH_RANK: Record<Strength, number> = { weak: 0, medium: 1, strong: 2 };
 
 const misses = (s: SkillState) => [...(s.recent ?? '')].filter((c) => c === '0').length;
 
+/** Stability (days) from which a skill counts as strong, and below which it is weak. */
+export const STRONG_STABILITY = 21;
+export const WEAK_STABILITY = 3;
+
 /**
- * Strength of one skill. weak: recently learned or struggling (misses, low accuracy, low ease)
- * · veryStrong: interval of 3+ weeks · strong: a week+ or 3+ successful reviews in a row · else medium
+ * Strength of one skill:
+ * - weak: learned in the last 2 days, struggling (2+ recent misses, accuracy under 60%), or a
+ *   memory that lasts less than 3 days;
+ * - strong: a memory that lasts 3 weeks or more;
+ * - medium: everything in between.
  */
 export function skillStrength(s: SkillState, learnedOn: string | undefined, on: string = today()): Strength {
   const acc = accuracy(s);
-  const recentlyLearned = !!learnedOn && diffDays(learnedOn, on) < 3;
-  if (recentlyLearned || s.reps <= 1 || misses(s) >= 2 || (acc !== null && s.answered! >= 3 && acc < 0.6) || s.ease < 1.8) return 'weak';
-  if (s.interval >= 21) return 'veryStrong';
-  if (s.interval >= 7 || s.reps >= 3) return 'strong';
-  return 'medium';
+  const recentlyLearned = !!learnedOn && diffDays(learnedOn, on) < 2;
+  const stab = stability(s);
+  if (recentlyLearned || misses(s) >= 2 || (acc !== null && s.answered! >= 3 && acc < 0.6) || stab < WEAK_STABILITY) return 'weak';
+  return stab >= STRONG_STABILITY ? 'strong' : 'medium';
 }
 
-/** The skill a word is weakest at (lowest strength, then shortest interval). */
+/** The skill a word is weakest at (lowest strength, then lowest stability). */
 export function weakestSkill(w: Word, on: string = today()): Skill | null {
   let best: Skill | null = null;
   let bestKey = Infinity;
   for (const k of activeSkills(w)) {
     const s = skillState(w, k, on);
-    const key = STRENGTH_RANK[skillStrength(s, w.learnedOn, on)] * 10_000 + s.interval;
+    const key = STRENGTH_RANK[skillStrength(s, w.learnedOn, on)] * 10_000 + stability(s);
     if (key < bestKey) [best, bestKey] = [k, key];
   }
   return best;
@@ -69,42 +76,48 @@ export function chooseExercise(w: Word, skill: Skill, opts: { listening: boolean
   const st = skillStrength(skillState(w, skill, opts.on), w.learnedOn, opts.on);
   // Recall: type the characters once it isn't weak any more. Pinyin: type it once strong.
   if (skill === 'recall' && st !== 'weak') return { ex: 'typing', dir };
-  if (st === 'strong' || st === 'veryStrong') return { ex: 'typing', dir };
+  if (st === 'strong') return { ex: 'typing', dir };
   if (skill === 'pinyin' && st === 'medium' && opts.listening && rnd() < 0.5) return { ex: 'listen', dir };
   return { ex: 'choice', dir };
 }
 
+// ---------- Priority ----------
+
+/** A learned word is rusty when one of its skills is less than 70% likely to be remembered. */
+export const RUSTY_RETRIEVABILITY = 0.7;
+const DAY = 86_400_000;
+
 /**
- * How much a skill needs practice (higher = weaker). Combines recent misses, overall accuracy,
- * low ease, how soon it's due, and how long since it was last seen.
+ * How much a skill needs practice now (higher first): most likely forgotten (low FSRS
+ * retrievability) first, then recent misses (including reader lookups), then low accuracy.
+ * Skills of words learned in the last 2 days get a boost.
  */
-export function skillWeakness(s: SkillState, on: string = today(), now: number = Date.now()): number {
+export function skillPriority(s: SkillState, learnedOn: string | undefined, now: number = Date.now()): number {
+  const r = retrievability(s, now);
   const acc = accuracy(s);
-  const recentMisses = misses(s) * 1.5; // 0–7.5
-  const lowAccuracy = (1 - (acc ?? 0.75)) * 4; // 0–4 (unknown ≈ 1)
-  const lowEase = ((2.5 - Math.min(2.5, s.ease)) / 1.2) * 2; // 0–2
-  const daysToDue = diffDays(on, s.due);
-  const dueSoon = daysToDue <= 0 ? 2 : 2 / (1 + daysToDue); // 0–2
-  const seen = s.lastSeen ?? (s.lastReviewed ? new Date(s.lastReviewed).getTime() : 0);
-  const unseen = Math.min(1.5, (now - seen) / 86_400_000 / 14); // up to 1.5 after 3 weeks
-  return recentMisses + lowAccuracy + lowEase + dueSoon + unseen;
+  const fresh = !!learnedOn && diffDays(learnedOn, today()) < 2 && now - new Date(`${learnedOn}T00:00:00`).getTime() < 3 * DAY;
+  return (1 - r) * 10 + misses(s) * 1.5 + (acc === null ? 0.5 : (1 - acc) * 3) + (fresh ? 3 : 0);
 }
 
-/** A word's weakness is that of its weakest skill. */
-export function weakness(w: Word, on: string = today(), now: number = Date.now()): number {
-  return Math.max(0, ...activeSkills(w).map((k) => skillWeakness(skillState(w, k, on), on, now)));
+export interface WordPriority {
+  word: Word;
+  /** The skill that needs practice most, and its priority. */
+  skill: Skill;
+  priority: number;
 }
 
-/** Pick the `n` weakest learned words (with a little shuffle so sessions vary). */
-export function pickPractice(words: Word[], n: number, opts: { on?: string; now?: number; rnd?: () => number } = {}): Word[] {
-  const rnd = opts.rnd ?? Math.random;
-  return words
-    .filter(isLearned)
-    .map((w) => ({ w, score: weakness(w, opts.on, opts.now) + rnd() * 0.75 }))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, n)
-    .map((x) => x.w);
+export function wordPriority(w: Word, now: number = Date.now()): WordPriority | null {
+  let best: WordPriority | null = null;
+  for (const k of activeSkills(w)) {
+    const p = skillPriority(skillState(w, k), w.learnedOn, now);
+    if (!best || p > best.priority) best = { word: w, skill: k, priority: p };
+  }
+  return best;
 }
+
+/** Learned words with a skill under 70% retrievability. */
+export const isRusty = (w: Word, now: number = Date.now()): boolean =>
+  activeSkills(w).some((k) => retrievability(skillState(w, k), now) < RUSTY_RETRIEVABILITY);
 
 // ---------- Cards ----------
 
@@ -125,7 +138,7 @@ export type Card =
 export interface Step {
   id: string;
   card: Card;
-  /** Skills whose schedule this card may change (Review: the due ones). Others only record accuracy. */
+  /** Skills whose FSRS card this card updates (on the first answer of the session). Others only record accuracy. */
   scheduled: Skill[];
   /** Writing: the delayed recall a few cards later (blank grid only, not graded for the schedule). */
   delayed?: boolean;
@@ -158,15 +171,12 @@ interface PlanOpts {
   on?: string;
 }
 
-const partFor = (w: Word, k: Skill, on?: string): Part => {
-  const s = skillStrength(skillState(w, k, on), w.learnedOn, on);
-  return s === 'strong' || s === 'veryStrong' ? 'typing' : 'choice';
-};
+const partFor = (w: Word, k: Skill, on?: string): Part => (skillStrength(skillState(w, k, on), w.learnedOn, on) === 'strong' ? 'typing' : 'choice');
 
 /**
- * The cards that test a word's `skills` (Review: its due skills). Meaning and pinyin share the
- * two-step card (asking both even if only one is due), recall gets its own card, writing a
- * writing card. Radical-only entries have no pinyin: meaning is asked on its own.
+ * The cards that test a word's `skills`. Meaning and pinyin share the two-step card (asking
+ * both), recall gets its own card, writing a writing card. Radical-only entries have no
+ * pinyin: meaning is asked on its own.
  */
 export function cardsFor(w: Word, skills: Skill[], opts: PlanOpts): Step[] {
   const { mode } = opts;
@@ -196,21 +206,15 @@ export function cardsFor(w: Word, skills: Skill[], opts: PlanOpts): Step[] {
   return steps;
 }
 
-/** Cards for everything due on the given words. */
-export const reviewCards = (words: Word[], opts: PlanOpts): Step[] => words.flatMap((w) => cardsFor(w, dueSkills(w, opts.on), opts));
-
-/** How many review cards the due words make (for "X reviews"; the mode barely changes it). */
-export const reviewCount = (words: Word[], on: string = today()): number =>
-  reviewCards(words, { mode: 'choice', listening: false, on }).length;
-
 /**
- * Practice: one card per word. Automatic: the word's weakest skill. Manual: the card direction
+ * One card for a word. Automatic: its highest-priority skill. Manual: the card direction
  * decides (中 → EN and 中 → 拼音 use the two-step card, EN → 中 tests recall).
+ * Every skill the card tests is graded.
  */
-export function practiceCard(w: Word, direction: Direction, opts: PlanOpts): Step {
+export function practiceCard(w: Word, direction: Direction, opts: PlanOpts & { skill?: Skill }): Step {
   const rnd = opts.rnd ?? Math.random;
   let skill: Skill;
-  if (opts.mode === 'auto') skill = weakestSkill(w, opts.on) ?? 'meaning';
+  if (opts.mode === 'auto') skill = opts.skill ?? wordPriority(w)?.skill ?? 'meaning';
   else if (opts.mode === 'writing') skill = 'writing';
   else {
     const dirs: CardDirection[] = ['zh-en', 'en-zh', 'zh-py'];
@@ -219,7 +223,6 @@ export function practiceCard(w: Word, direction: Direction, opts: PlanOpts): Ste
     if (skill === 'pinyin' && isRadicalOnly(w)) skill = 'meaning';
   }
   const [step] = cardsFor(w, [skill], opts);
-  // Practice: every skill the card tests counts (a miss brings it forward).
   return { ...step, scheduled: testedSkills(step.card) };
 }
 
@@ -231,26 +234,56 @@ export function retryOf(step: Step): Step {
   return step;
 }
 
-/**
- * Order cards most overdue first, without showing the same word twice in a row
- * (when that can't be avoided, e.g. only one word left, it still comes).
- */
-export function orderSteps(steps: Step[], words: Map<string, Word>, rnd: () => number = Math.random, on: string = today()): Step[] {
-  const dueOf = (s: Step) => {
-    const w = words.get(s.id);
-    return w ? s.scheduled.map((k) => skillState(w, k, on).due).sort()[0] ?? on : on;
-  };
-  const rest = steps
-    .map((s) => ({ s, key: dueOf(s), r: rnd() }))
-    .sort((a, b) => a.key.localeCompare(b.key) || a.r - b.r)
-    .map((x) => x.s);
-  const out: Step[] = [];
+/** Keep the order, but never the same word twice in a row (when avoidable). */
+export function spreadSteps<T extends { id: string }>(steps: T[]): T[] {
+  const rest = steps.slice();
+  const out: T[] = [];
   while (rest.length) {
     const prev = out[out.length - 1]?.id;
     const i = Math.max(0, rest.findIndex((s) => s.id !== prev));
     out.push(rest.splice(i, 1)[0]);
   }
   return out;
+}
+
+// ---------- Practice sessions ----------
+
+/** Share of a session taken from the highest-priority words; the rest are random stronger words. */
+export const PRIORITY_SHARE = 0.8;
+
+/**
+ * The words of a practice session of `size` exercises (one card each): about 80% the
+ * highest-priority words, about 20% picked at random from the rest, so strong words still come
+ * up now and then. In a mixed order.
+ */
+export function pickSession(words: Word[], size: number, opts: { now?: number; rnd?: () => number } = {}): WordPriority[] {
+  const rnd = opts.rnd ?? Math.random;
+  const now = opts.now ?? Date.now();
+  const ranked = words
+    .filter(isLearned)
+    .map((w) => wordPriority(w, now))
+    .filter((x): x is WordPriority => !!x)
+    // A little noise, so equal priorities don't always come in the same order.
+    .map((x) => ({ x, key: x.priority + rnd() * 0.3 }))
+    .sort((a, b) => b.key - a.key)
+    .map((y) => y.x);
+  const top = Math.min(ranked.length, Math.max(1, Math.round(size * PRIORITY_SHARE)));
+  const chosen = ranked.slice(0, top);
+  const rest = ranked.slice(top);
+  for (let n = Math.min(size - chosen.length, rest.length); n > 0; n--) chosen.push(rest.splice(Math.floor(rnd() * rest.length), 1)[0]);
+  // Mix the random ones in among the priority ones.
+  for (let i = chosen.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [chosen[i], chosen[j]] = [chosen[j], chosen[i]];
+  }
+  return chosen;
+}
+
+/** Balance hint: many rusty words → refresh first; few → a good time to learn new words. */
+export function balanceHint(words: Word[], now: number = Date.now()): { rusty: number; learned: number; refresh: boolean } {
+  const learned = words.filter(isLearned);
+  const rusty = learned.filter((w) => isRusty(w, now)).length;
+  return { rusty, learned: learned.length, refresh: rusty >= Math.max(5, learned.length * 0.2) };
 }
 
 // ---------- Lessons vs topics ----------

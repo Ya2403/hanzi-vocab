@@ -2,8 +2,7 @@ import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { useStore, type ImportMode } from '../store';
 import { today } from '../lib/date';
 import { exportData, parseImport } from '../lib/io';
-import { isDueLearned, isLearned, isLeech, isNew, LEECH_FILTER } from '../lib/srs';
-import { strength } from '../lib/planner';
+import { isLeech, isNew, LEECH_FILTER } from '../lib/srs';
 import { liveStreak } from '../lib/streak';
 import { updateSettings, useSettings } from '../lib/settings';
 import { hasChineseVoice, onVoicesChanged, speak, speechSupported } from '../lib/speech';
@@ -12,9 +11,7 @@ import { hanziDictCached, loadHanziDict } from '../lib/hanziDict';
 import { Segmented } from '../components/Segmented';
 import { BulkAdd } from '../components/BulkAdd';
 import { SyncCard } from '../components/SyncCard';
-import { TraceOptions } from '../components/TraceOptions';
-import { SentenceStats } from '../components/SentenceStats';
-import { SkillStats } from '../components/SkillStats';
+import { ReadableStats, SkillStats } from '../components/SkillStats';
 import { Session } from '../components/Session';
 import type { Word } from '../lib/types';
 import { TatoebaBulk } from '../components/Sentences';
@@ -35,9 +32,7 @@ export function DataScreen() {
   useEffect(() => onVoicesChanged(() => setVoiceOk(hasChineseVoice())), []);
 
   const learned = words.filter((w) => !isNew(w)).length;
-  const mature = words.filter((w) => isLearned(w) && strength(w) === 'veryStrong').length;
   const leeches = words.filter(isLeech).length;
-  const due = words.filter((w) => isDueLearned(w)).length;
 
   const onFile = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -72,7 +67,6 @@ export function DataScreen() {
         words={tonePractice}
         mode={settings.autoExercise ? 'auto' : 'typing'}
         direction="zh-py"
-        updateSchedule={false}
         skill="pinyin"
         onExit={() => setTonePractice(null)}
       />
@@ -86,8 +80,6 @@ export function DataScreen() {
         <div className="stat-grid">
           <Stat value={words.length} label="words" />
           <Stat value={learned} label="learned" />
-          <Stat value={mature} label="mature (21d+)" />
-          <Stat value={due} label="due now" />
           <Stat value={liveStreak(streak, today())} label="current streak" />
           <Stat value={streak.longest} label="longest streak" />
           <Stat value={leeches} label="🐛 leeches" />
@@ -96,7 +88,7 @@ export function DataScreen() {
 
       <SkillStats words={words} onPracticeTones={setTonePractice} />
 
-      <SentenceStats />
+      <ReadableStats />
 
       <SyncCard />
 
@@ -300,7 +292,7 @@ function Stat({ value, label }: { value: number; label: string }) {
 }
 
 function SettingsCard({ leechCount }: { leechCount: number }) {
-  const { showPinyin, pinyinAfterAnswer, listPinyin, leechThreshold, writingPractice, tones } = useSettings();
+  const { showPinyin, pinyinAfterAnswer, listPinyin, leechThreshold, tones } = useSettings();
   return (
     <div className="card form">
       <h2>Settings</h2>
@@ -347,20 +339,7 @@ function SettingsCard({ leechCount }: { leechCount: number }) {
         Answers always show the tone marks.
       </p>
 
-      <Segmented
-        label="Writing practice"
-        value={writingPractice ? 'on' : 'off'}
-        onChange={(v) => updateSettings({ writingPractice: v === 'on' })}
-        options={[
-          { value: 'off', label: 'Off' },
-          { value: 'on', label: 'On' },
-        ]}
-      />
-      <p className="hint">
-        When on, a word also gets a writing skill (draw it from memory) once its recall interval reaches 6 days. Writing
-        reviews then have their own schedule.
-      </p>
-      {writingPractice && <TraceOptions />}
+
 
       <label className="field">
         <span className="field-label">Leech threshold</span>

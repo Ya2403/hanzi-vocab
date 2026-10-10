@@ -8,8 +8,6 @@ export type Tones = 'ignore' | 'show' | 'required';
 export interface Settings {
   autoPlay: boolean;
   speechRate: number;
-  reviewMode: PracticeMode;
-  reviewDirection: Direction;
   practiceMode: PracticeMode;
   practiceDirection: Direction;
   /** Writing: trace over the outline before writing from memory (always, only for new or weak words, never). */
@@ -24,16 +22,10 @@ export interface Settings {
   autoExercise: boolean;
   /** Practice: cards per session. */
   practiceSize: number;
-  /** Practice: words only, or words and sentences. */
-  practiceSentences: boolean;
   /** Learn mode: words taught per batch. */
   learnBatchSize: number;
   /** Learn mode: new words per day. */
   learnDailyLimit: number;
-  /** Learn mode: new sentences per day. */
-  sentenceDailyLimit: number;
-  /** A sentence is ready to learn when at least this % of its words are learned. */
-  sentenceReadyPercent: number;
   /** Learn mode: finish each batch with a typing round. */
   learnTyping: boolean;
   /** Pinyin tones: ignore (spelling only), show (marked, wrong tones accepted but counted), required (wrong tones = Close). */
@@ -53,11 +45,11 @@ export interface Settings {
 }
 
 const KEY = 'hanzi-vocab:settings';
+/** Writing practice is hidden for now (see srs.ts WRITING_ENABLED). */
+const WRITING_UI = false;
 const defaults: Settings = {
   autoPlay: true,
   speechRate: 0.8,
-  reviewMode: 'flashcards',
-  reviewDirection: 'zh-en',
   practiceMode: 'choice',
   practiceDirection: 'mixed',
   traceMode: 'weak',
@@ -67,11 +59,8 @@ const defaults: Settings = {
   choiceStyle: 'single',
   autoExercise: true,
   practiceSize: 20,
-  practiceSentences: true,
   learnBatchSize: 6,
   learnDailyLimit: 15,
-  sentenceDailyLimit: 6,
-  sentenceReadyPercent: 70,
   learnTyping: false,
   writingPractice: false,
   tones: 'ignore',
@@ -90,7 +79,9 @@ function load(): Settings {
     if (!raw) return defaults;
     const stored = { ...defaults, ...JSON.parse(raw) } as Settings;
     // The word "Sentence" mode was replaced by sentence items with their own exercises.
-    for (const k of ['reviewMode', 'practiceMode'] as const) if ((stored[k] as string) === 'sentence') stored[k] = 'choice';
+    // Modes that no longer exist (the old Sentence mode; Writing while it's hidden) fall back to choice.
+    if ((stored.practiceMode as string) === 'sentence' || (stored.practiceMode === 'writing' && !WRITING_UI)) stored.practiceMode = 'choice';
+    if (![10, 20, 30].includes(stored.practiceSize)) stored.practiceSize = 20;
     return stored;
   } catch {
     return defaults;

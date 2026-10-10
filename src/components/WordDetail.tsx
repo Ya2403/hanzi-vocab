@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '../store';
-import { formatDate } from '../lib/date';
 import { useSettings } from '../lib/settings';
-import { isDueLearned, isLeech, isNew, leechSkills, nextDue } from '../lib/srs';
+import { isLeech, isNew, leechSkills } from '../lib/srs';
+import { strength } from '../lib/planner';
 import { SkillTable } from './SkillTable';
 import type { Word } from '../lib/types';
 import { Breakdown } from './Breakdown';
@@ -34,12 +34,7 @@ export function WordDetail({ word: initial, onClose, onEdit }: { word: Word; onC
     await deleteWord(word.id);
   };
 
-  const due = nextDue(word);
-  const status = isNew(word)
-    ? 'New: not learned yet (learn it in the Learn tab)'
-    : isDueLearned(word)
-      ? 'Due for review today'
-      : `Next review ${due ? formatDate(due) : '–'}`;
+  const status = isNew(word) ? 'New: not learned yet (learn it in the Learn tab)' : `Learned · ${strength(word)}`;
 
   return (
     <Modal title="Word" onClose={onClose}>

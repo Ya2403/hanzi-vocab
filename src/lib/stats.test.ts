@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { skillTotals, tagProgress, toneTrouble } from './stats';
+import { computeLinks, createSentence } from './sentences';
+import { readableStats, strengthByTag, strengthCounts, toneTrouble } from './stats';
 import { newSrs } from './srs';
-import type { SkillState, Word } from './types';
+import type { Dialogue, SkillState, Word } from './types';
 
-const st = (interval: number): SkillState => ({ ...newSrs('2026-09-29'), interval, reps: 2, due: '2026-12-01', lastReviewed: '2026-09-20' });
-const w = (hanzi: string, tags: string[], iv: [number, number, number] | null, toneErrors?: number): Word => ({
+const NOW = new Date('2026-10-10T12:00:00').getTime();
+const st = (interval: number, lastReviewed = '2026-10-08'): SkillState => ({ ...newSrs('2026-10-10'), interval, reps: 3, due: '2026-12-01', lastReviewed });
+const w = (hanzi: string, tags: string[], iv: [number, number, number] | null, extra: Partial<Word> = {}): Word => ({
   id: hanzi,
   hanzi,
   pinyin: 'x',
@@ -13,26 +15,43 @@ const w = (hanzi: string, tags: string[], iv: [number, number, number] | null, t
   createdAt: 0,
   updatedAt: 0,
   skills: iv ? { meaning: st(iv[0]), pinyin: st(iv[1]), recall: st(iv[2]) } : {},
-  toneErrors,
+  ...extra,
 });
 
-describe('skill stats', () => {
-  const words = [w('一', ['HSK lesson 1'], [10, 3, 7]), w('二', ['HSK lesson 1', 'food'], [20, 8, 1], 2), w('三', ['food'], null), w('四', [], [1, 1, 1], 5)];
+describe('words by strength', () => {
+  const words = [
+    w('一', ['HSK lesson 1'], [30, 40, 25]), // strong
+    w('二', ['HSK lesson 1', 'food'], [30, 8, 30], { toneErrors: 2 }), // medium (weakest skill 8 days)
+    w('三', ['food'], null), // new
+    w('四', [], [1, 1, 1], { toneErrors: 5 }), // weak
+    w('五', [], [10, 10, 10], { skills: { meaning: st(4, '2026-08-01'), pinyin: st(10), recall: st(10) } }), // rusty
+  ];
 
-  it('counts known skills (interval of a week or more)', () => {
-    const t = skillTotals(words);
-    expect([t.meaning.known, t.pinyin.known, t.recall.known]).toEqual([2, 1, 1]);
-    expect(t.meaning.active).toBe(3);
+  it('counts weak / medium / strong, new and rusty', () => {
+    expect(strengthCounts(words, NOW)).toEqual({ new: 1, weak: 1, medium: 2, strong: 1, rusty: 1 });
   });
 
-  it('shows new vs learned and known skills per tag', () => {
-    expect(tagProgress(words)).toEqual([
-      { tag: 'food', total: 2, learned: 1, known: { meaning: 1, pinyin: 1, recall: 0, writing: 0 } },
-      { tag: 'HSK lesson 1', total: 2, learned: 2, known: { meaning: 2, pinyin: 1, recall: 1, writing: 0 } },
+  it('per tag', () => {
+    expect(strengthByTag(words, NOW)).toEqual([
+      { tag: 'food', new: 1, weak: 0, medium: 1, strong: 0, rusty: 0 },
+      { tag: 'HSK lesson 1', new: 0, weak: 0, medium: 1, strong: 1, rusty: 0 },
     ]);
   });
 
   it('lists words with tone errors, most first', () => {
     expect(toneTrouble(words).map((x) => x.hanzi)).toEqual(['四', '二']);
+  });
+});
+
+describe('readable sentences', () => {
+  it('counts sentences whose words are all learned, per tag and per dialogue', () => {
+    const words = [w('我', [], [10, 10, 10]), w('是', [], [10, 10, 10]), w('学生', [], null)];
+    const a = createSentence({ zh: '我是。', pinyin: 'x', translation: 'x', tags: ['lesson 1'] }, 0, 'a');
+    const b = createSentence({ zh: '我是学生。', pinyin: 'x', translation: 'x', tags: ['lesson 1'] }, 0, 'b');
+    const d: Dialogue = { id: 'd', title: '第一课', tags: [], lines: [{ sentenceId: 'a' }, { sentenceId: 'b' }], createdAt: 0, updatedAt: 0 };
+    const r = readableStats([a, b], [d], computeLinks([a, b], words));
+    expect(r.all).toEqual({ readable: 1, total: 2 });
+    expect(r.tags).toEqual([{ tag: 'lesson 1', readable: 1, total: 2 }]);
+    expect(r.dialogues.map((x) => [x.dialogue.title, x.readable, x.total])).toEqual([['第一课', 1, 2]]);
   });
 });
