@@ -24,6 +24,8 @@ export interface Settings {
   autoExercise: boolean;
   /** Practice: cards per session. */
   practiceSize: number;
+  /** Practice: review words inside sentences (off / ~40% of eligible reviews / whenever possible). */
+  useSentences: 'off' | 'some' | 'max';
   /** Learn mode: words taught per batch. */
   learnBatchSize: number;
   /** Learn mode: new words per day. */
@@ -62,6 +64,7 @@ const defaults: Settings = {
   choiceStyle: 'single',
   autoExercise: true,
   practiceSize: 20,
+  useSentences: 'some',
   learnBatchSize: 6,
   learnDailyLimit: 15,
   learnTyping: false,

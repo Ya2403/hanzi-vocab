@@ -3165,3 +3165,48 @@ body.in-session .view-switch {
 .word-chips.center {
   justify-content: center;
 }
+
+/* ---------- Words in context ---------- */
+.diff {
+  font-size: 1.2rem;
+  letter-spacing: 1px;
+}
+.diff-ok {
+  color: var(--good);
+}
+.diff-missing {
+  color: var(--bad);
+  text-decoration: underline wavy var(--bad);
+  opacity: 0.85;
+}
+.diff-extra {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+.diff-wrong {
+  color: var(--bad);
+  font-weight: 700;
+}
+.diff-wrong s {
+  color: var(--muted);
+  font-weight: 400;
+  margin-right: 1px;
+}
+.diff-line {
+  text-align: center;
+  margin: 4px 0;
+}
+.reply-english {
+  margin-top: 10px;
+  font-size: 1.05rem;
+}
+.prompt-sentence mark.target {
+  background: var(--warn-soft);
+  color: inherit;
+  border-bottom: 2px solid var(--warn);
+  border-radius: 3px;
+  padding: 0 2px;
+}
+.read-check-buttons {
+  gap: 10px;
+}

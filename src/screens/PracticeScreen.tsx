@@ -117,6 +117,24 @@ export function PracticeScreen({ onGoToLearn, onGoToWords }: { onGoToLearn(): vo
             <input type="checkbox" checked={settings.autoExercise} onChange={(e) => updateSettings({ autoExercise: e.target.checked })} />
             <span>Choose exercises automatically</span>
           </label>
+          {settings.autoExercise && (
+            <>
+              <Segmented
+                label="Use sentences in reviews"
+                value={settings.useSentences}
+                onChange={(v) => updateSettings({ useSentences: v })}
+                options={[
+                  { value: 'off', label: 'Off' },
+                  { value: 'some', label: 'Some' },
+                  { value: 'max', label: 'As much as possible' },
+                ]}
+              />
+              <p className="hint">
+                Words can be reviewed inside a sentence that contains them (one where your other words are learned): fill the
+                blank, reply in a dialogue, or read and check. Some = about 40% of the reviews that have such a sentence.
+              </p>
+            </>
+          )}
           {settings.autoExercise ? (
             <p className="hint">
               Each word is tested on the skill that needs it most. Meaning and pinyin are asked together (the meaning first, then the

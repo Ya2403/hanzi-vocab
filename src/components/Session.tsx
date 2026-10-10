@@ -15,6 +15,10 @@ import { TwoStepCard } from './TwoStepCard';
 import { Icon } from './Icon';
 import { QuietBadge } from './QuietBadge';
 import { endQuietSession, isQuiet, startQuiet } from '../lib/quiet';
+import { dialoguePositions, withContext, type ContextStep } from '../lib/contextReview';
+import { retrievability } from '../lib/fsrs';
+import { RUSTY_RETRIEVABILITY } from '../lib/planner';
+import { ContextCardView, type ContextResult } from './ContextCards';
 
 export type { SessionMode } from '../lib/planner';
 
@@ -38,6 +42,8 @@ interface Props {
 }
 
 type Grades = Partial<Record<Skill, number>>;
+type Item = Step | ContextStep;
+const isContext = (s: Item | undefined): s is ContextStep => s?.card.kind === 'context';
 
 const skillKey = (id: string, k: Skill) => `${id}|${k}`;
 
@@ -50,8 +56,9 @@ const MATCH_BATCH = 5;
  * as an easier card (so a word appears at most twice). The end shows a short summary.
  */
 export function Session({ title, words: initialWords, mode, direction, skillFor, skill, onExit, onFinish, onAnotherRound }: Props) {
-  const { words: allWords, updateWord, recordReview, completeSession } = useStore();
-  const { writingStyle, leechThreshold, showPinyin, choiceStyle } = useSettings();
+  const { words: allWords, sentences, dialogues, links, updateWord, updateWords, recordReview, completeSession } = useStore();
+  const { writingStyle, leechThreshold, showPinyin, choiceStyle, useSentences } = useSettings();
+  const lineOf = useMemo(() => dialoguePositions(dialogues, sentences), [dialogues, sentences]);
 
   // Full-screen practice: the app header is hidden while a session is open (see .in-session in CSS).
   useEffect(() => {
@@ -65,8 +72,8 @@ export function Session({ title, words: initialWords, mode, direction, skillFor,
   const planOpts = { mode, listening: listeningAvailable && !isQuiet(), choiceStyle };
 
   const [leech, setLeech] = useState<{ id: string; lapses: number; skill: Skill } | null>(null);
-  const [queue, setQueue] = useState<Step[]>(() =>
-    spreadSteps(
+  const [queue, setQueue] = useState<Item[]>(() => {
+    const steps = spreadSteps(
       initialWords.map((w): Step =>
         skill === 'pinyin'
           ? // Tone practice: type the pinyin, so the tones are really checked.
@@ -75,8 +82,11 @@ export function Session({ title, words: initialWords, mode, direction, skillFor,
             ? { ...cardsFor(w, [skill], planOpts)[0], scheduled: [skill] }
             : practiceCard(w, direction, { ...planOpts, skill: skillFor?.get(w.id) }),
       ),
-    ),
-  );
+    );
+    // Automatic mode: some word reviews happen in a sentence that contains the word.
+    if (mode !== 'auto' || skill) return steps;
+    return withContext(steps, new Map(initialWords.map((w) => [w.id, w])), { links, lineOf: (id) => lineOf.get(id) }, { use: useSentences });
+  });
   const [total, setTotal] = useState(() => queue.length);
   /** First answer per word|skill this session. */
   const [results, setResults] = useState<Map<string, number>>(new Map());
@@ -108,7 +118,7 @@ export function Session({ title, words: initialWords, mode, direction, skillFor,
    * session updates its FSRS card (and can flag a leech); every answer records accuracy.
    * Skills the word isn't reviewed on (e.g. hidden writing) aren't touched.
    */
-  const gradeCard = (w: Word, s: Step, grades: Grades, toneError = false, fresh = results) => {
+  const gradeCard = (w: Word, s: Item, grades: Grades, toneError = false, fresh = results) => {
     recordReview().catch(() => {});
     const active = activeSkills(w);
     const skills: Skills = { ...w.skills };
@@ -136,10 +146,50 @@ export function Session({ title, words: initialWords, mode, direction, skillFor,
   };
 
   /** A missed word comes back once, later, as an easier card. */
-  const requeue = (missed: Step[]) => {
+  const requeue = (missed: Item[]) => {
     const again = missed.filter((s) => !retried.has(s.id));
     if (again.length) setRetried((r) => new Set([...r, ...again.map((s) => s.id)]));
-    return again.map(retryOf);
+    // A missed sentence card comes back as the easy word card for the same skill.
+    return again.map((s): Step => {
+      if (!isContext(s)) return retryOf(s);
+      const w = wordOf(s.id)!;
+      return retryOf(practiceCard(w, direction, { ...planOpts, mode: 'auto', skill: s.card.skill }));
+    });
+  };
+
+  /**
+   * A sentence card: the target word's skill (and words also highlighted) are graded like a
+   * word card. The other learned words of a reply record accuracy on recall; a wrong one that
+   * is also rusty gets an Again.
+   */
+  const answerContext = (r: ContextResult) => {
+    if (!current || !word || !isContext(current)) return;
+    gradeCard(word, current, { [current.card.skill]: r.q });
+    let seen = results;
+    for (const [id, q] of r.also ?? []) {
+      const w = wordOf(id);
+      if (!w) continue;
+      const firsts = gradeCard(w, { id, card: current.card, scheduled: ['meaning'] }, { meaning: q }, false, seen);
+      seen = new Map([...seen, ...firsts]);
+    }
+    if (r.others?.size) {
+      const now = Date.now();
+      const updated = [...r.others].flatMap(([id, ok]) => {
+        const w = wordOf(id);
+        if (!w || !isLearned(w)) return [];
+        let st = skillState(w, 'recall');
+        if (!ok && retrievability(st, now) < RUSTY_RETRIEVABILITY) st = reviewWithLeech(st, Grade.Again, leechThreshold, now).srs;
+        return [{ ...w, skills: { ...w.skills, recall: recordAnswer(st, ok, now) } }];
+      });
+      if (updated.length) updateWords(updated).catch((e) => console.error('Failed to save answer', e));
+    }
+    setAnsweredCards((n) => n + 1);
+    // The target and any highlighted word that was missed come back once as a word card.
+    const missedAlso = [...(r.also ?? [])].filter(([id, q]) => q < 3 && wordOf(id)).map(([id]): ContextStep => ({ id, card: { ...current.card, skill: 'meaning' }, scheduled: ['meaning'] }));
+    const retry = requeue([...(r.q < 3 ? [current] : []), ...missedAlso]);
+    if (retry.length) setTotal((t) => t + retry.length);
+    setQueue(([, ...rest]) => [...rest, ...retry]);
+    setStep((x) => x + 1);
   };
 
   const answer = (grades: Grades, toneError = false) => {
@@ -153,7 +203,7 @@ export function Session({ title, words: initialWords, mode, direction, skillFor,
       setQueue(([head, ...rest]) => {
         if (head.delayed || rest.length < DELAYED_RECALL.min) return rest;
         const at = Math.min(rest.length, DELAYED_RECALL.min + Math.floor(Math.random() * (DELAYED_RECALL.max - DELAYED_RECALL.min + 1)));
-        return [...rest.slice(0, at), { ...head, delayed: true, scheduled: [] }, ...rest.slice(at)];
+        return [...rest.slice(0, at), { ...(head as Step), delayed: true, scheduled: [] }, ...rest.slice(at)];
       });
       setStep((s) => s + 1);
       return;
@@ -172,7 +222,10 @@ export function Session({ title, words: initialWords, mode, direction, skillFor,
     const c = current?.card;
     if (!(mode === 'choice' && choiceStyle === 'match' && c?.kind === 'single' && c.ex === 'choice')) return [];
     const seen = new Set<string>();
-    return queue.filter((s) => s.card.kind === 'single' && s.card.ex === 'choice' && s.card.dir === c.dir && !seen.has(s.id) && seen.add(s.id)).slice(0, MATCH_BATCH);
+    return queue
+      .filter((s): s is Step => !isContext(s))
+      .filter((s) => s.card.kind === 'single' && s.card.ex === 'choice' && s.card.dir === c.dir && !seen.has(s.id) && seen.add(s.id))
+      .slice(0, MATCH_BATCH);
   }, [mode, choiceStyle, current, queue]);
   const matchRound = matchSteps.length > 1;
   const answerBatch = (list: { id: string; quality: number }[]) => {
@@ -185,7 +238,7 @@ export function Session({ title, words: initialWords, mode, direction, skillFor,
       seen = new Map([...seen, ...firsts]);
     }
     setAnsweredCards((n) => n + matchSteps.length);
-    const inRound = new Set(matchSteps);
+    const inRound = new Set<Item>(matchSteps);
     const retry = requeue(matchSteps.filter((s) => (q.get(s.id) ?? 0) < 3));
     if (retry.length) setTotal((t) => t + retry.length);
     setQueue((qu) => [...qu.filter((s) => !inRound.has(s)), ...retry]);
@@ -195,7 +248,7 @@ export function Session({ title, words: initialWords, mode, direction, skillFor,
   /** "Can't listen now": skip this card ungraded and swap any other listening cards for multiple choice. */
   const cantListen = () => {
     startQuiet();
-    setQueue(([, ...rest]) => rest.map((s) => (s.card.kind === 'single' && s.card.ex === 'listen' ? { ...s, card: { ...s.card, ex: 'choice' as const } } : s)));
+    setQueue(([, ...rest]) => rest.map((s): Item => (s.card.kind === 'single' && s.card.ex === 'listen' ? { ...s, card: { ...s.card, ex: 'choice' as const } } : s)));
     setTotal((t) => t - 1);
     setStep((s) => s + 1);
   };
@@ -251,28 +304,8 @@ export function Session({ title, words: initialWords, mode, direction, skillFor,
     );
   }
 
-  const choicePool = learnedPool.length >= 4 ? learnedPool : allWords;
-  const c = current.card;
-  const writingCard = (onAnswer: (q: number) => void) => (
-    <WritingFlow key={`${writingStyle}-${step}`} word={word} onAnswer={onAnswer} onSkip={skip} blankOnly={current.delayed} />
-  );
-
-  let card;
-  if (matchRound) {
-    const batch = matchSteps.map((s) => wordOf(s.id)).filter((w): w is Word => !!w);
-    card = <MatchPairs key={step} words={batch} direction={c.kind === 'single' ? c.dir : 'zh-en'} onDone={answerBatch} />;
-  } else if (c.kind === 'pair') {
-    card = <TwoStepCard key={step} word={word} pool={choicePool} pinyinEx={c.p} onDone={(r) => answer({ meaning: r.meaning, pinyin: r.pinyin }, r.toneError)} />;
-  } else if (c.kind === 'flash') card = <Flashcard key={step} word={word} direction={c.dir} skills={c.skills} onAnswer={answer} />;
-  else if (c.ex === 'writing') card = writingCard(answerOne(c.skill));
-  else if (c.ex === 'listen') card = <ListenChoice key={step} word={word} pool={choicePool} onAnswer={answerOne('pinyin')} onCantListen={cantListen} />;
-  else if (c.ex === 'typing') card = <Typing key={step} word={word} direction={c.dir} onAnswer={answerOne(c.skill)} />;
-  else card = <MultipleChoice key={step} word={word} allWords={choicePool} direction={c.dir} onAnswer={answerOne(c.skill)} />;
-
-  const label = matchRound ? 'match pairs' : testedSkills(c).map((k) => SKILL_LABEL[k].toLowerCase()).join(' + ');
-
-  return (
-    <div className="session">
+  const sessionBar = (label: string) => (
+    <>
       <div className="session-bar">
         <button className="icon-btn" onClick={onExit} aria-label="End session" title="End session">
           <Icon name="close" />
@@ -297,8 +330,60 @@ export function Session({ title, words: initialWords, mode, direction, skillFor,
       <div className="session-title muted small">
         {title} · {label}
         {current.delayed && ' · recall'}
-        {retried.has(current.id) && results.has(skillKey(current.id, testedSkills(c)[0])) && ' · again'}
+        {retried.has(current.id) && results.has(skillKey(current.id, isContext(current) ? current.card.skill : testedSkills(current.card)[0])) && ' · again'}
       </div>
+    </>
+  );
+
+  const choicePool = learnedPool.length >= 4 ? learnedPool : allWords;
+  if (isContext(current)) {
+    const sentence = sentences.find((x) => x.id === current.card.sentenceId);
+    const pos = lineOf.get(current.card.sentenceId);
+    const prevLine = pos && pos.index > 0 ? pos.lines[pos.index - 1] : undefined;
+    const speakerOf = (id: string) => dialogues.flatMap((d) => d.lines).find((l) => l.sentenceId === id)?.speaker;
+    const ex = current.card.ex === 'cloze' ? 'fill the blank' : current.card.ex === 'reply' ? 'reply' : 'read and check';
+    return (
+      <div className="session">
+        {sessionBar(`${SKILL_LABEL[current.card.skill].toLowerCase()} · ${ex}`)}
+        {sentence ? (
+          <ContextCardView
+            key={step}
+            card={current.card}
+            word={word}
+            sentence={sentence}
+            prev={prevLine && pos ? { sentence: prevLine, speaker: speakerOf(prevLine.id), lines: pos.lines } : undefined}
+            onAnswer={answerContext}
+          />
+        ) : (
+          <button className="btn" onClick={skip}>
+            Skip (sentence not found)
+          </button>
+        )}
+      </div>
+    );
+  }
+  const c = current.card;
+  const writingCard = (onAnswer: (q: number) => void) => (
+    <WritingFlow key={`${writingStyle}-${step}`} word={word} onAnswer={onAnswer} onSkip={skip} blankOnly={current.delayed} />
+  );
+
+  let card;
+  if (matchRound) {
+    const batch = matchSteps.map((s) => wordOf(s.id)).filter((w): w is Word => !!w);
+    card = <MatchPairs key={step} words={batch} direction={c.kind === 'single' ? c.dir : 'zh-en'} onDone={answerBatch} />;
+  } else if (c.kind === 'pair') {
+    card = <TwoStepCard key={step} word={word} pool={choicePool} pinyinEx={c.p} onDone={(r) => answer({ meaning: r.meaning, pinyin: r.pinyin }, r.toneError)} />;
+  } else if (c.kind === 'flash') card = <Flashcard key={step} word={word} direction={c.dir} skills={c.skills} onAnswer={answer} />;
+  else if (c.ex === 'writing') card = writingCard(answerOne(c.skill));
+  else if (c.ex === 'listen') card = <ListenChoice key={step} word={word} pool={choicePool} onAnswer={answerOne('pinyin')} onCantListen={cantListen} />;
+  else if (c.ex === 'typing') card = <Typing key={step} word={word} direction={c.dir} onAnswer={answerOne(c.skill)} />;
+  else card = <MultipleChoice key={step} word={word} allWords={choicePool} direction={c.dir} onAnswer={answerOne(c.skill)} />;
+
+  const label = matchRound ? 'match pairs' : testedSkills(c).map((k) => SKILL_LABEL[k].toLowerCase()).join(' + ');
+
+  return (
+    <div className="session">
+      {sessionBar(label)}
       {card}
     </div>
   );
