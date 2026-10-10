@@ -1,11 +1,14 @@
 import { useMemo, useState } from 'react';
 import { useStore } from '../store';
+import { pendingReading, READING_EXERCISES } from '../lib/dailyReading';
 import { today } from '../lib/date';
 import { balanceHint, pickSession } from '../lib/planner';
 import { updateSettings, useSettings } from '../lib/settings';
 import { isLearned } from '../lib/srs';
 import { liveStreak } from '../lib/streak';
-import type { Skill, Word } from '../lib/types';
+import type { Dialogue, Skill, Word } from '../lib/types';
+import { TodayReadingCard } from '../components/DailyReading';
+import { dialogueText, Reader } from '../components/Reader';
 import { Session } from '../components/Session';
 import { modeAvailable, SessionOptions } from '../components/SessionOptions';
 import { Segmented } from '../components/Segmented';
@@ -20,28 +23,37 @@ const SIZES = ['10', '20', '30'] as const;
  * and accuracy (about 80% the words that need it most, 20% random stronger ones).
  */
 export function PracticeScreen({ onGoToLearn, onGoToWords }: { onGoToLearn(): void; onGoToWords(): void }) {
-  const { words, streak, daily } = useStore();
+  const { words, sentences, dialogues, streak, daily } = useStore();
   const settings = useSettings();
   // A focus can be preselected via a link like #practice?tag=HSK1 (from the word list).
   const [tags, setTags] = useState<string[]>(() => {
     const t = new URLSearchParams(location.hash.split('?')[1]).get('tag');
     return t ? [t] : [];
   });
-  const [session, setSession] = useState<{ words: Word[]; skillFor: Map<string, Skill>; key: number } | null>(null);
+  // A session starts with today's reading when it hasn't been read yet.
+  const [session, setSession] = useState<{ words: Word[]; skillFor: Map<string, Skill>; key: number; reading?: Dialogue } | null>(null);
+  const [reading, setReading] = useState<Dialogue | null>(null);
 
   const learned = useMemo(() => words.filter(isLearned), [words]);
   const pool = wordsInTags(learned, tags);
   const size = Number(SIZES.includes(String(settings.practiceSize) as (typeof SIZES)[number]) ? settings.practiceSize : 20);
-  const count = Math.min(pool.length, size);
+  const pending = pendingReading(dialogues);
+  const wordSize = pending ? Math.max(1, size - READING_EXERCISES) : size;
+  const count = Math.min(pool.length, wordSize);
   const mode = settings.autoExercise ? 'auto' : settings.practiceMode;
   const hint = useMemo(() => balanceHint(learned), [learned]);
   const on = today();
 
   const start = () => {
-    const picked = pickSession(pool, size);
-    setSession({ words: picked.map((p) => p.word), skillFor: new Map(picked.map((p) => [p.word.id, p.skill])), key: Date.now() });
+    const picked = pickSession(pool, wordSize);
+    setSession({ words: picked.map((p) => p.word), skillFor: new Map(picked.map((p) => [p.word.id, p.skill])), key: Date.now(), reading: pending });
   };
 
+  if (reading) return <Reader text={dialogueText(reading, sentences)} onClose={() => setReading(null)} />;
+  if (session?.reading) {
+    // The reading first; closing it (finished or not) goes on to the words.
+    return <Reader key={session.key} text={dialogueText(session.reading, sentences)} onClose={() => setSession({ ...session, reading: undefined })} />;
+  }
   if (session) {
     return (
       <Session
@@ -83,7 +95,7 @@ export function PracticeScreen({ onGoToLearn, onGoToWords }: { onGoToLearn(): vo
               Start practice
             </button>
             <p className="muted small practice-sub">
-              {count} exercise{count === 1 ? '' : 's'} · 🔥 {liveStreak(streak, on)} day streak · {daily.date === on ? daily.reviews : 0} answers today
+              {pending ? `Today’s reading + ${count} word exercise${count === 1 ? '' : 's'}` : `${count} exercise${count === 1 ? '' : 's'}`} · 🔥 {liveStreak(streak, on)} day streak · {daily.date === on ? daily.reviews : 0} answers today
             </p>
             <p className={`balance-hint ${hint.refresh ? 'refresh' : 'good'}`}>
               {hint.refresh ? (
@@ -109,6 +121,8 @@ export function PracticeScreen({ onGoToLearn, onGoToWords }: { onGoToLearn(): vo
           </>
         )}
       </div>
+
+      {learned.length > 0 && <TodayReadingCard onRead={setReading} />}
 
       {learned.length > 0 && (
         <details className="card form exercise-settings">

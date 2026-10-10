@@ -50,7 +50,8 @@ export function readableStats(sentences: Sentence[], dialogues: Dialogue[], link
   return {
     all: readableOf(sentences, links),
     tags: tags.map((tag) => ({ tag, ...readableOf(sentences.filter((s) => s.tags.includes(tag)), links) })),
-    dialogues: [...dialogues]
+    dialogues: dialogues
+      .filter((d) => d.kind !== 'reading')
       .sort((a, b) => a.title.localeCompare(b.title, undefined, { numeric: true }))
       .map((d) => ({ dialogue: d, ...readableOf(d.lines.map((l) => byId.get(l.sentenceId)).filter((s): s is Sentence => !!s), links) })),
   };

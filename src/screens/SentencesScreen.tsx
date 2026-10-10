@@ -11,8 +11,10 @@ import { Modal } from '../components/Modal';
 import { NeedsTranslation, SentenceForm, SentenceRow, WordChips } from '../components/SentenceParts';
 import { BulkSentences, FillTranslations } from '../components/SentenceBulk';
 import { SpeakButton } from '../components/SpeakButton';
-import { lastReadOf, Reader, type ReaderText } from '../components/Reader';
+import { dialogueText, lastReadOf, Reader, type ReaderText } from '../components/Reader';
 import { formatDate, toDateStr } from '../lib/date';
+import { isReading } from '../lib/dailyReading';
+import { NewReading } from '../components/DailyReading';
 
 const NEEDS = '__needs__';
 
@@ -164,7 +166,8 @@ export function SentencesView({ onOpenWord }: { onOpenWord(w: Word): void }) {
 
 /** Words tab → Dialogues: lesson texts, each an ordered list of lines. */
 export function DialoguesView({ onOpenWord }: { onOpenWord(w: Word): void }) {
-  const { dialogues, sentences } = useStore();
+  const { dialogues: all, sentences } = useStore();
+  const dialogues = useMemo(() => all.filter((d) => !isReading(d)), [all]);
   const [adding, setAdding] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [readingId, setReadingId] = useState<string | null>(null);
@@ -174,12 +177,7 @@ export function DialoguesView({ onOpenWord }: { onOpenWord(w: Word): void }) {
   const reading = dialogues.find((d) => d.id === readingId);
 
   if (reading) {
-    const text: ReaderText = {
-      key: `d:${reading.id}`,
-      title: reading.title,
-      dialogueId: reading.id,
-      lines: reading.lines.map((l) => ({ sentence: byId.get(l.sentenceId)!, speaker: l.speaker })).filter((l) => !!l.sentence),
-    };
+    const text = dialogueText(reading, sentences);
     return (
       <>
         <Reader
@@ -208,7 +206,7 @@ export function DialoguesView({ onOpenWord }: { onOpenWord(w: Word): void }) {
       ) : (
         <>
           <div className="list-header">
-            <span className="muted small">{dialogues.length} dialogues</span>
+            <span className="muted small">{dialogues.length} dialogue{dialogues.length === 1 ? '' : 's'}</span>
             <button className="link-btn" onClick={() => setAdding(true)}>
               Add dialogue
             </button>
@@ -252,6 +250,91 @@ export function DialoguesView({ onOpenWord }: { onOpenWord(w: Word): void }) {
         <Icon name="plus" size={26} />
       </button>
       {adding && <BulkSentences initialMode="dialogue" onClose={() => setAdding(false)} />}
+      {open && <DialogueDetail dialogue={open} onClose={() => setOpenId(null)} onOpenWord={onOpenWord} />}
+    </>
+  );
+}
+
+/** Words tab → Readings: the daily readings, newest first. */
+export function ReadingsView({ onOpenWord }: { onOpenWord(w: Word): void }) {
+  const { dialogues, sentences } = useStore();
+  const [adding, setAdding] = useState(false);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [readingId, setReadingId] = useState<string | null>(null);
+  const byId = useMemo(() => new Map(sentences.map((s) => [s.id, s])), [sentences]);
+  const list = useMemo(
+    () => dialogues.filter(isReading).sort((a, b) => (b.readingDate ?? '').localeCompare(a.readingDate ?? '') || b.createdAt - a.createdAt),
+    [dialogues],
+  );
+  const open = list.find((d) => d.id === openId);
+  const reading = list.find((d) => d.id === readingId);
+
+  if (reading) {
+    return (
+      <Reader
+        text={dialogueText(reading, sentences)}
+        onClose={() => setReadingId(null)}
+        onEdit={() => {
+          setReadingId(null);
+          setOpenId(reading.id);
+        }}
+      />
+    );
+  }
+
+  return (
+    <>
+      {list.length === 0 ? (
+        <div className="empty card">
+          <div className="empty-mark" lang="zh-CN">读</div>
+          <h2>No readings yet</h2>
+          <p>A reading is a short text an AI chat writes from the words you know. Get one here or from Practice → Today’s reading.</p>
+          <button className="btn primary" onClick={() => setAdding(true)}>
+            <Icon name="plus" /> Get a new reading
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="list-header">
+            <span className="muted small">{list.length} reading{list.length === 1 ? '' : 's'}</span>
+            <button className="link-btn" onClick={() => setAdding(true)}>
+              Get a new reading
+            </button>
+          </div>
+          <ul className="dialogue-list">
+            {list.map((d) => {
+              const lines = d.lines.map((l) => byId.get(l.sentenceId)).filter((s): s is Sentence => !!s);
+              return (
+                <li key={d.id} className="card dialogue-card" onClick={() => setReadingId(d.id)} role="button" tabIndex={0}>
+                  <div className="dialogue-title">{d.title}</div>
+                  <div className="muted small">
+                    {d.readingDate ? formatDate(d.readingDate) : ''} · {lines.length} sentence{lines.length === 1 ? '' : 's'}
+                    {d.lastRead ? ` · read ${formatDate(toDateStr(new Date(d.lastRead)))}` : ' · not read yet'}
+                  </div>
+                  <div className="dialogue-preview" lang="zh-CN">
+                    {lines
+                      .slice(0, 2)
+                      .map((s) => s.zh)
+                      .join(' ')}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      )}
+      <button className="fab" onClick={() => setAdding(true)} aria-label="Get a new reading">
+        <Icon name="plus" size={26} />
+      </button>
+      {adding && (
+        <NewReading
+          onClose={() => setAdding(false)}
+          onSaved={(d) => {
+            setAdding(false);
+            setReadingId(d.id);
+          }}
+        />
+      )}
       {open && <DialogueDetail dialogue={open} onClose={() => setOpenId(null)} onOpenWord={onOpenWord} />}
     </>
   );
@@ -309,14 +392,14 @@ function DialogueDetail({ dialogue, onClose, onOpenWord }: { dialogue: Dialogue;
   };
 
   const remove = async () => {
-    if (!confirm(`Delete the dialogue “${dialogue.title}”?`)) return;
+    if (!confirm(`Delete the ${isReading(dialogue) ? 'reading' : 'dialogue'} “${dialogue.title}”?`)) return;
     const withSentences = confirm(`Also delete its ${lines.length} sentences?\n\nOK: delete them too. Cancel: keep them as loose sentences.`);
     await deleteDialogue(dialogue.id, withSentences);
     onClose();
   };
 
   return (
-    <Modal title="Dialogue" onClose={onClose}>
+    <Modal title={isReading(dialogue) ? 'Reading' : 'Dialogue'} onClose={onClose}>
       <div className="dialogue-detail">
         {editMode ? (
           <div className="form">

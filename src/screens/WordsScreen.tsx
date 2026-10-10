@@ -13,14 +13,14 @@ import { WordForm } from '../components/WordForm';
 import { BulkAdd } from '../components/BulkAdd';
 import { WordDetail } from '../components/WordDetail';
 import { Segmented } from '../components/Segmented';
-import { DialoguesView, SentencesView } from './SentencesScreen';
+import { DialoguesView, ReadingsView, SentencesView } from './SentencesScreen';
 
 type Sort = 'newest' | 'oldest' | 'weakest' | 'pinyin';
-type ListView = 'words' | 'sentences' | 'dialogues';
+type ListView = 'words' | 'sentences' | 'dialogues' | 'readings';
 const VIEW_KEY = 'hanzi-vocab:listView';
 
 export function WordsScreen() {
-  const { words, sentences, dialogues, loading, deleteWord, addWords } = useStore();
+  const { words, loading, deleteWord, addWords } = useStore();
   const [query, setQuery] = useState('');
   const [tag, setTag] = useState<string | null>(null);
   const { listPinyin } = useSettings();
@@ -88,8 +88,9 @@ export function WordsScreen() {
         onChange={switchView}
         options={[
           { value: 'words', label: `Words` },
-          { value: 'sentences', label: `Sentences${sentences.length ? ` · ${sentences.length}` : ''}` },
-          { value: 'dialogues', label: `Dialogues${dialogues.length ? ` · ${dialogues.length}` : ''}` },
+          { value: 'sentences', label: 'Sentences' },
+          { value: 'dialogues', label: 'Dialogues' },
+          { value: 'readings', label: 'Readings' },
         ]}
       />
     </div>
@@ -114,7 +115,13 @@ export function WordsScreen() {
     return (
       <section className="screen">
         {viewSwitch}
-        {view === 'sentences' ? <SentencesView onOpenWord={setDetail} /> : <DialoguesView onOpenWord={setDetail} />}
+        {view === 'sentences' ? (
+          <SentencesView onOpenWord={setDetail} />
+        ) : view === 'readings' ? (
+          <ReadingsView onOpenWord={setDetail} />
+        ) : (
+          <DialoguesView onOpenWord={setDetail} />
+        )}
         {wordModals}
       </section>
     );

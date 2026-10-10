@@ -126,6 +126,10 @@ export interface Dialogue {
   lines: DialogueLine[];
   /** When it was last read through in the Reader (ms). */
   lastRead?: number;
+  /** A daily reading (made by an AI chat from my words) rather than a lesson dialogue. */
+  kind?: 'reading';
+  /** Daily reading: the local date it was made for. */
+  readingDate?: string;
   createdAt: number;
   updatedAt: number;
 }

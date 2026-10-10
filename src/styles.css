@@ -3210,3 +3210,61 @@ body.in-session .view-switch {
 .read-check-buttons {
   gap: 10px;
 }
+
+/* ---------- Daily reading ---------- */
+.today-reading {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.today-reading-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.today-reading-head h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+.today-reading .muted.small {
+  margin: 0;
+}
+.today-reading-title {
+  align-self: flex-start;
+  text-align: left;
+}
+.status-pill {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  white-space: nowrap;
+}
+.status-pill.done {
+  background: var(--good-soft);
+  color: var(--good);
+}
+.reading-preview-lines {
+  margin: 8px 0 0;
+  padding-left: 1.4em;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.reading-preview-zh {
+  font-family: var(--font-zh);
+  font-size: 1.1rem;
+}
+.unknown-word {
+  background: var(--warn-soft);
+  color: var(--warn);
+  border-radius: 4px;
+  padding: 0 1px;
+}
+.unknown-word.new {
+  background: transparent;
+  color: var(--easy);
+  text-decoration: underline dotted;
+}

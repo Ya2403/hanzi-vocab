@@ -9,7 +9,7 @@ import { getSettings, updateSettings, useSettings } from '../lib/settings';
 import { speak, speakAll, speechSupported, stopSpeaking } from '../lib/speech';
 import { Grade, recordAnswer, reviewWithLeech, skillState, withSkill } from '../lib/srs';
 import { writableChars } from '../lib/strokes';
-import type { Sentence, Word } from '../lib/types';
+import type { Dialogue, Sentence, Word } from '../lib/types';
 import { Icon } from './Icon';
 import { QuietBadge } from './QuietBadge';
 import { Session } from './Session';
@@ -27,6 +27,20 @@ export interface ReaderText {
 export interface ReadingResult {
   reviewed: number;
   lookedUp: Word[];
+}
+
+/** A dialogue (or daily reading) as a text for the reader. */
+export function dialogueText(d: Dialogue, sentences: Sentence[]): ReaderText {
+  const byId = new Map(sentences.map((s) => [s.id, s]));
+  return {
+    key: `d:${d.id}`,
+    title: d.title,
+    dialogueId: d.id,
+    lines: d.lines.flatMap((l) => {
+      const sentence = byId.get(l.sentenceId);
+      return sentence ? [{ sentence, speaker: l.speaker }] : [];
+    }),
+  };
 }
 
 const RATES = [0.6, 0.8, 1] as const;

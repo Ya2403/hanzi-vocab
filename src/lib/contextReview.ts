@@ -124,6 +124,7 @@ export function dialoguePositions(dialogues: Dialogue[], sentences: Sentence[]):
   const byId = new Map(sentences.map((s) => [s.id, s]));
   const out = new Map<string, { lines: Sentence[]; index: number }>();
   for (const d of dialogues) {
+    if (d.kind === 'reading') continue; // a reading has no replies
     const lines = d.lines.map((l) => byId.get(l.sentenceId)).filter((s): s is Sentence => !!s);
     lines.forEach((s, index) => out.set(s.id, { lines, index }));
   }

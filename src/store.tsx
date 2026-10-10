@@ -35,7 +35,7 @@ interface Store {
   addSentences(inputs: SentenceInput[]): Promise<Sentence[]>;
   updateSentences(sentences: Sentence[]): Promise<void>;
   deleteSentences(ids: string[]): Promise<void>;
-  addDialogue(title: string, tags: string[], lines: NewLine[]): Promise<Dialogue>;
+  addDialogue(title: string, tags: string[], lines: NewLine[], extra?: Pick<Dialogue, 'kind' | 'readingDate'>): Promise<Dialogue>;
   updateDialogue(dialogue: Dialogue): Promise<void>;
   /** Delete a dialogue; its sentences are deleted too, or kept as loose sentences. */
   deleteDialogue(id: string, withSentences: boolean): Promise<void>;
@@ -201,12 +201,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     await S.remove(ids);
   }, []);
 
-  const addDialogue = useCallback(async (title: string, tags: string[], lines: NewLine[]) => {
+  const addDialogue = useCallback(async (title: string, tags: string[], lines: NewLine[], extra?: Pick<Dialogue, 'kind' | 'readingDate'>) => {
     const now = Date.now();
     const id = newId();
     const sentences = lines.map((l, i) => ({ ...createSentence(l.input, now + i), dialogueId: id }));
     const lineList: DialogueLine[] = sentences.map((s, i) => ({ sentenceId: s.id, speaker: lines[i].speaker?.trim() || undefined }));
-    const dialogue: Dialogue = { id, title: title.trim() || 'Dialogue', tags: [...new Set(tags.map((t) => t.trim()).filter(Boolean))], lines: lineList, createdAt: now, updatedAt: now };
+    const dialogue: Dialogue = { id, title: title.trim() || 'Dialogue', tags: [...new Set(tags.map((t) => t.trim()).filter(Boolean))], lines: lineList, ...extra, createdAt: now, updatedAt: now };
     await S.save(sentences);
     await D.save([dialogue]);
     return dialogue;

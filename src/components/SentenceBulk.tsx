@@ -8,7 +8,7 @@ import { Segmented } from './Segmented';
 const PREVIEW_LIMIT = 200;
 
 /** "Copy prompt" with a fallback textarea when the clipboard isn't available. */
-function PromptCopy({ prompt, what }: { prompt: string; what: string }) {
+export function PromptCopy({ prompt, what }: { prompt: string; what: string }) {
   const [copied, setCopied] = useState<'ok' | 'failed' | null>(null);
   const ref = useRef<HTMLTextAreaElement>(null);
   const copy = async () => {
@@ -36,7 +36,7 @@ function PromptCopy({ prompt, what }: { prompt: string; what: string }) {
   );
 }
 
-function PasteBox({ value, onChange, placeholder, label }: { value: string; onChange(v: string): void; placeholder: string; label: string }) {
+export function PasteBox({ value, onChange, placeholder, label }: { value: string; onChange(v: string): void; placeholder: string; label: string }) {
   const [error, setError] = useState<string | null>(null);
   const paste = async () => {
     try {
