@@ -12,6 +12,7 @@ import { SpeakButton } from './SpeakButton';
 import { WordExamples, NotesBox } from './WordExtras';
 import { HanziText } from './HanziText';
 import { CharFormula, UsedIn } from './Entries';
+import { distractorOrder } from '../lib/entries';
 
 /** Play once when a card appears (respecting the auto-play setting), even under StrictMode. */
 function useAutoPlay(text: string) {
@@ -115,7 +116,7 @@ export function ListenChoice({
   onCantListen?(): void;
 }) {
   const [options] = useState(() =>
-    shuffle([word, ...shuffle(pool.filter((w) => w.id !== word.id && w.hanzi !== word.hanzi)).slice(0, 3)]),
+    shuffle([word, ...distractorOrder(word, pool.filter((w) => w.id !== word.id && w.hanzi !== word.hanzi), shuffle).slice(0, 3)]),
   );
   const [picked, setPicked] = useState<string | null>(null);
   const played = useRef(false);

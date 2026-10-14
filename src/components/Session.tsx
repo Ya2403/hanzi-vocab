@@ -18,7 +18,8 @@ import { endQuietSession, isQuiet, startQuiet } from '../lib/quiet';
 import { dialoguePositions, withContext, type ContextStep } from '../lib/contextReview';
 import { retrievability } from '../lib/fsrs';
 import { RUSTY_RETRIEVABILITY } from '../lib/planner';
-import { isWordEntry, recordWordAnswer } from '../lib/entries';
+import { entryKind, isWordEntry, recordWordAnswer } from '../lib/entries';
+import { targetChar } from '../lib/wordPractice';
 import { ContextCardView, type ContextResult } from './ContextCards';
 import { HanziText } from './HanziText';
 
@@ -35,6 +36,8 @@ interface Props {
   skillFor?: Map<string, Skill>;
   /** Test this skill on every word. */
   skill?: Skill;
+  /** Words standing in for a character: word id → the character (id) whose skill they review. */
+  targets?: Map<string, string>;
   /** Leave early (✕). */
   onExit(): void;
   /** "Done" at the end; defaults to onExit. */
@@ -57,8 +60,8 @@ const MATCH_BATCH = 5;
  * to each skill in the session also updates its FSRS card. A missed card comes back once, later,
  * as an easier card (so a word appears at most twice). The end shows a short summary.
  */
-export function Session({ title, words: initialWords, mode, direction, skillFor, skill, onExit, onFinish, onAnotherRound }: Props) {
-  const { words: allWords, sentences, dialogues, links, updateWord, updateWords, recordReview, completeSession } = useStore();
+export function Session({ title, words: initialWords, mode, direction, skillFor, skill, targets, onExit, onFinish, onAnotherRound }: Props) {
+  const { words: allWords, sentences, dialogues, links, charLinks, updateWord, updateWords, recordReview, completeSession } = useStore();
   const { writingStyle, leechThreshold, showPinyin, choiceStyle, useSentences } = useSettings();
   const lineOf = useMemo(() => dialoguePositions(dialogues, sentences), [dialogues, sentences]);
 
@@ -74,15 +77,27 @@ export function Session({ title, words: initialWords, mode, direction, skillFor,
   const planOpts = { mode, listening: listeningAvailable && !isQuiet(), choiceStyle };
 
   const [leech, setLeech] = useState<{ id: string; lapses: number; skill: Skill } | null>(null);
+  /** A word reviews a character's skill: given, or its weakest learned character. */
+  const targetOf = (w: Word): string | undefined => targets?.get(w.id) ?? (isWordEntry(w) ? targetChar(w, charLinks)?.id : undefined);
+  /** A word card's exercise follows its target character's strength (words have no schedule). */
+  const planned = (w: Word, target: string | undefined): Word => {
+    const t = target && allWords.find((x) => x.id === target);
+    return t ? { ...w, skills: t.skills, learnedOn: t.learnedOn } : w;
+  };
+  const cardOf = (w: Word, k?: Skill, opts = planOpts): Step => {
+    const target = targetOf(w);
+    // Names: meaning only.
+    if (entryKind(w) === 'name') return { id: w.id, card: { kind: 'single', skill: 'meaning', ex: 'choice', dir: 'zh-en' }, scheduled: ['meaning'], target };
+    const base = skill ? { ...cardsFor(planned(w, target), [skill], opts)[0], scheduled: [skill] } : practiceCard(planned(w, target), direction, { ...opts, skill: k });
+    return { ...base, id: w.id, target };
+  };
   const [queue, setQueue] = useState<Item[]>(() => {
-    const steps = spreadSteps(
-      initialWords.map(
-        (w): Step => (skill ? { ...cardsFor(w, [skill], planOpts)[0], scheduled: [skill] } : practiceCard(w, direction, { ...planOpts, skill: skillFor?.get(w.id) })),
-      ),
-    );
+    const steps = spreadSteps(initialWords.map((w): Step => cardOf(w, skillFor?.get(w.id))));
     // Automatic mode: some word reviews happen in a sentence that contains the word.
     if (mode !== 'auto' || skill) return steps;
-    return withContext(steps, new Map(initialWords.map((w) => [w.id, w])), { links, lineOf: (id) => lineOf.get(id) }, { use: useSentences });
+    // A word's exercise follows its target character's strength (see planned).
+    const plannedById = new Map(initialWords.map((w) => [w.id, planned(w, targetOf(w))]));
+    return withContext(steps, plannedById, { links, lineOf: (id) => lineOf.get(id) }, { use: useSentences });
   });
   const [total, setTotal] = useState(() => queue.length);
   /** First answer per word|skill this session. */
@@ -111,11 +126,63 @@ export function Session({ title, words: initialWords, mode, direction, skillFor,
   }, [current, answeredCards]);
 
   /**
-   * Save one card's answers in a single write: the first answer to each tested skill this
-   * session updates its FSRS card (and can flag a leech); every answer records accuracy.
-   * Skills the word isn't reviewed on (e.g. hidden writing) aren't touched.
+   * Save one card's answers. A character: see gradeChar. A word: see gradeWord. Returns the
+   * first answers (entry|skill → grade) recorded for this session's summary.
    */
-  const gradeCard = (w: Word, s: Item, grades: Grades, toneError = false, fresh = results) => {
+  const gradeCard = (w: Word, s: Item, grades: Grades, toneError = false, fresh = results, wrongChars?: string[]) =>
+    isWordEntry(w) ? gradeWord(w, s, grades, fresh, wrongChars) : gradeChar(w, s, grades, toneError, fresh);
+
+  /**
+   * A word card counts for its characters. Right: a Good review for the target character's
+   * tested skill, accuracy only for the other characters. Wrong: a miss for the character that was
+   * wrong (the typed one, when known; otherwise the target), and "needs work" for the word. The
+   * word's own statistics record the answer either way.
+   */
+  const gradeWord = (w: Word, s: Item, grades: Grades, fresh: Map<string, number>, wrongChars?: string[]) => {
+    recordReview().catch(() => {});
+    const now = Date.now();
+    const list = Object.entries(grades) as [Skill, number][];
+    const ok = list.every(([, q]) => q >= 3);
+    const firsts = new Map<string, number>();
+    for (const [k, q] of list) if (!fresh.has(skillKey(w.id, k))) firsts.set(skillKey(w.id, k), q);
+    const updates: Word[] = [recordWordAnswer(w, ok, now)];
+    const target = s.target ? wordOf(s.target) : undefined;
+    const culprits = new Set(wrongChars ?? []);
+    let becameLeech: { id: string; lapses: number; skill: Skill } | null = null;
+    for (const slot of charLinks.charsOf.get(w.id) ?? []) {
+      const c = slot.entry && wordOf(slot.entry.id);
+      if (!c || !isLearned(c)) continue;
+      const isTarget = c.id === target?.id;
+      const charOk = ok || (wrongChars ? !culprits.has(slot.char) : !isTarget);
+      const active = activeSkills(c);
+      const skills: Skills = { ...c.skills };
+      for (const [k, q] of list) {
+        if (!active.includes(k)) continue;
+        let st = skillState(c, k);
+        const key = skillKey(c.id, k);
+        if (isTarget && s.scheduled.includes(k) && !s.delayed && !fresh.has(key)) {
+          const qc = ok ? q : charOk ? Grade.Good : Grade.Again;
+          firsts.set(key, qc);
+          const r = reviewWithLeech(st, qc, leechThreshold, now);
+          st = r.srs;
+          if (r.becameLeech) becameLeech = { id: c.id, lapses: st.lapses, skill: k };
+        }
+        skills[k] = recordAnswer(st, charOk, now);
+      }
+      updates.push({ ...c, skills });
+    }
+    if (firsts.size) setResults((r) => new Map([...r, ...firsts]));
+    updateWords(updates).catch((e) => console.error('Failed to save answer', e));
+    if (becameLeech) setLeech(becameLeech);
+    return firsts;
+  };
+
+  /**
+   * A character card, in a single write: the first answer to each tested skill this session
+   * updates its FSRS card (and can flag a leech); every answer records accuracy. Skills the
+   * character isn't reviewed on (e.g. hidden writing) aren't touched.
+   */
+  const gradeChar = (w: Word, s: Item, grades: Grades, toneError: boolean, fresh: Map<string, number>) => {
     recordReview().catch(() => {});
     const active = activeSkills(w);
     const skills: Skills = { ...w.skills };
@@ -150,7 +217,7 @@ export function Session({ title, words: initialWords, mode, direction, skillFor,
     return again.map((s): Step => {
       if (!isContext(s)) return retryOf(s);
       const w = wordOf(s.id)!;
-      return retryOf(practiceCard(w, direction, { ...planOpts, mode: 'auto', skill: s.card.skill }));
+      return retryOf(cardOf(w, s.card.skill, { ...planOpts, mode: 'auto' }));
     });
   };
 
@@ -166,7 +233,7 @@ export function Session({ title, words: initialWords, mode, direction, skillFor,
     for (const [id, q] of r.also ?? []) {
       const w = wordOf(id);
       if (!w) continue;
-      const firsts = gradeCard(w, { id, card: current.card, scheduled: ['meaning'] }, { meaning: q }, false, seen);
+      const firsts = gradeCard(w, { id, card: current.card, scheduled: ['meaning'], target: targetOf(w) }, { meaning: q }, false, seen);
       seen = new Map([...seen, ...firsts]);
     }
     if (r.others?.size) {
@@ -183,16 +250,18 @@ export function Session({ title, words: initialWords, mode, direction, skillFor,
     }
     setAnsweredCards((n) => n + 1);
     // The target and any highlighted word that was missed come back once as a word card.
-    const missedAlso = [...(r.also ?? [])].filter(([id, q]) => q < 3 && wordOf(id)).map(([id]): ContextStep => ({ id, card: { ...current.card, skill: 'meaning' }, scheduled: ['meaning'] }));
+    const missedAlso = [...(r.also ?? [])]
+      .filter(([id, q]) => q < 3 && wordOf(id))
+      .map(([id]): ContextStep => ({ id, card: { ...current.card, skill: 'meaning' }, scheduled: ['meaning'], target: targetOf(wordOf(id)!) }));
     const retry = requeue([...(r.q < 3 ? [current] : []), ...missedAlso]);
     if (retry.length) setTotal((t) => t + retry.length);
     setQueue(([, ...rest]) => [...rest, ...retry]);
     setStep((x) => x + 1);
   };
 
-  const answer = (grades: Grades, toneError = false) => {
+  const answer = (grades: Grades, toneError = false, wrongChars?: string[]) => {
     if (!current || !word) return;
-    gradeCard(word, current, grades, toneError);
+    gradeCard(word, current, grades, toneError, results, wrongChars);
     setAnsweredCards((n) => n + 1);
     const c = current.card;
     if (c.kind === 'single' && c.ex === 'writing') {
@@ -212,8 +281,8 @@ export function Session({ title, words: initialWords, mode, direction, skillFor,
     setQueue(([, ...rest]) => [...rest, ...retry]);
     setStep((s) => s + 1);
   };
-  /** A card that tests one skill. */
-  const answerOne = (k: Skill) => (q: number, toneError?: boolean) => answer({ [k]: q }, toneError);
+  /** A card that tests one skill (typing can tell which characters were wrong). */
+  const answerOne = (k: Skill) => (q: number, wrongChars?: string[]) => answer({ [k]: q }, false, wrongChars);
 
   // Match pairs: several single-skill cards of the same direction (different words) at once.
   const matchSteps = useMemo(() => {

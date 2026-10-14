@@ -150,3 +150,22 @@ export function reconcileKind(w: Word): Word {
 /** Whether an entry needs reconcileKind (for one-time migrations of stored data). */
 export const needsReconcile = (w: Word): boolean => reconcileKind(w) !== w;
 
+
+/** Whether two entries have a character in common (电脑 / 电话). */
+export function sharesChar(a: Pick<Word, 'hanzi'>, b: Pick<Word, 'hanzi'>): boolean {
+  const cs = new Set(entryChars(a.hanzi));
+  return entryChars(b.hanzi).some((c) => cs.has(c));
+}
+
+/**
+ * Distractor order for a multiple-choice question: for a word, other words that share a
+ * character with it come first (so every character has to be read); then entries with a tag in
+ * common; then the rest. Each group is shuffled.
+ */
+export function distractorOrder(answer: Word, candidates: Word[], shuffle: <T>(xs: readonly T[]) => T[]): Word[] {
+  const sharing = isWordEntry(answer) ? shuffle(candidates.filter((w) => isWordEntry(w) && sharesChar(w, answer))) : [];
+  const rest = candidates.filter((w) => !sharing.includes(w));
+  const related = shuffle(rest.filter((w) => w.tags.some((t) => answer.tags.includes(t))));
+  const others = shuffle(rest.filter((w) => !related.includes(w)));
+  return [...sharing, ...related, ...others];
+}

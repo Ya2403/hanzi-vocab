@@ -9,6 +9,7 @@ import type { CardDirection, Word } from '../lib/types';
 import { SpeakButton } from './SpeakButton';
 import { Icon } from './Icon';
 import { HanziText } from './HanziText';
+import { distractorOrder } from '../lib/entries';
 
 interface Props {
   word: Word;
@@ -29,13 +30,11 @@ interface Option {
 
 const OPTION_COUNT = 4;
 
-/** Other words that can't be confused with the answer, preferring ones that share a tag. */
+/** Other entries that can't be confused with the answer: for a word, words sharing a character first; then ones that share a tag. */
 function otherWords(word: Word, pool: Word[]): Word[] {
   const key = (w: Word) => w.meaning.trim().toLowerCase();
   const candidates = pool.filter((w) => w.id !== word.id && w.hanzi !== word.hanzi && key(w) !== key(word));
-  const related = shuffle(candidates.filter((w) => w.tags.some((t) => word.tags.includes(t))));
-  const others = shuffle(candidates.filter((w) => !related.includes(w)));
-  return [...related, ...others];
+  return distractorOrder(word, candidates, shuffle);
 }
 
 function buildOptions(word: Word, pool: Word[], direction: CardDirection, toneless: boolean): Option[] {

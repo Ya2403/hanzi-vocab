@@ -10,6 +10,7 @@ import { Icon } from './Icon';
 import { SpeakButton } from './SpeakButton';
 import { NotesBox, WordExamples } from './WordExtras';
 import { HanziText } from './HanziText';
+import { distractorOrder } from '../lib/entries';
 
 export interface TwoStepResult {
   meaning: number;
@@ -35,8 +36,7 @@ const OPTIONS = 4;
 function meaningOptions(word: Word, pool: Word[]): Option[] {
   const seen = new Set([normalizeSearch(word.meaning)]);
   const out: Option[] = [{ label: word.meaning, correct: true }];
-  const related = shuffle(pool.filter((w) => w.tags.some((t) => word.tags.includes(t))));
-  for (const w of [...related, ...shuffle(pool)]) {
+  for (const w of distractorOrder(word, pool, shuffle)) {
     if (out.length >= OPTIONS) break;
     const key = normalizeSearch(w.meaning);
     if (w.id === word.id || w.hanzi === word.hanzi || seen.has(key)) continue;

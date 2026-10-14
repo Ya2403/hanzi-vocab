@@ -2,10 +2,11 @@ import { useMemo, useState } from 'react';
 import { useStore } from '../store';
 import { pendingReading, READING_EXERCISES } from '../lib/dailyReading';
 import { today } from '../lib/date';
-import { balanceHint, pickSession } from '../lib/planner';
+import { balanceHint } from '../lib/planner';
+import { planSession } from '../lib/wordPractice';
 import { updateSettings, useSettings } from '../lib/settings';
 import { isLearned } from '../lib/srs';
-import { isCharEntry } from '../lib/entries';
+import { isCharEntry, isWordEntry } from '../lib/entries';
 import { liveStreak } from '../lib/streak';
 import type { Dialogue, Skill, Word } from '../lib/types';
 import { TodayReadingCard } from '../components/DailyReading';
@@ -19,12 +20,13 @@ import { tagLabel, wordsInTags } from '../components/TagPicker';
 const SIZES = ['10', '20', '30'] as const;
 
 /**
- * The home screen. One button starts a session of a fixed number of exercises; which words
+ * The home screen. One button starts a session of a fixed number of exercises; which characters
  * come up is decided in the background from each skill's FSRS retrievability, recent misses
- * and accuracy (about 80% the words that need it most, 20% random stronger ones).
+ * and accuracy (about 80% the ones that need it most, 20% random stronger ones). Some of them are
+ * practised through one of their words, and words that need work come up on their own.
  */
 export function PracticeScreen({ onGoToLearn, onGoToWords }: { onGoToLearn(): void; onGoToWords(): void }) {
-  const { words, sentences, dialogues, streak, daily } = useStore();
+  const { words, sentences, dialogues, charLinks, streak, daily } = useStore();
   const settings = useSettings();
   // A focus can be preselected via a link like #practice?tag=HSK1 (from the word list).
   const [tags, setTags] = useState<string[]>(() => {
@@ -32,12 +34,13 @@ export function PracticeScreen({ onGoToLearn, onGoToWords }: { onGoToLearn(): vo
     return t ? [t] : [];
   });
   // A session starts with today's reading when it hasn't been read yet.
-  const [session, setSession] = useState<{ words: Word[]; skillFor: Map<string, Skill>; key: number; reading?: Dialogue } | null>(null);
+  const [session, setSession] = useState<{ words: Word[]; skillFor: Map<string, Skill>; targets: Map<string, string>; key: number; reading?: Dialogue } | null>(null);
   const [reading, setReading] = useState<Dialogue | null>(null);
 
   // Sessions pick character skills (words come in through their characters).
   const learned = useMemo(() => words.filter((w) => isCharEntry(w) && isLearned(w)), [words]);
   const pool = wordsInTags(learned, tags);
+  const unlockedWords = useMemo(() => words.filter((w) => isWordEntry(w) && isLearned(w)), [words]);
   const size = Number(SIZES.includes(String(settings.practiceSize) as (typeof SIZES)[number]) ? settings.practiceSize : 20);
   const pending = pendingReading(dialogues);
   const wordSize = pending ? Math.max(1, size - READING_EXERCISES) : size;
@@ -47,8 +50,14 @@ export function PracticeScreen({ onGoToLearn, onGoToWords }: { onGoToLearn(): vo
   const on = today();
 
   const start = () => {
-    const picked = pickSession(pool, wordSize);
-    setSession({ words: picked.map((p) => p.word), skillFor: new Map(picked.map((p) => [p.word.id, p.skill])), key: Date.now(), reading: pending });
+    const picked = planSession(pool, wordsInTags(unlockedWords, tags), wordSize, charLinks, { use: settings.wordsInPractice });
+    setSession({
+      words: picked.map((p) => p.entry),
+      skillFor: new Map(picked.map((p) => [p.entry.id, p.skill])),
+      targets: new Map(picked.flatMap((p) => (p.target ? [[p.entry.id, p.target.id] as const] : []))),
+      key: Date.now(),
+      reading: pending,
+    });
   };
 
   if (reading) return <Reader text={dialogueText(reading, sentences)} onClose={() => setReading(null)} />;
@@ -63,6 +72,7 @@ export function PracticeScreen({ onGoToLearn, onGoToWords }: { onGoToLearn(): vo
         title={`Practice${tags.length ? ` · ${tags.map(tagLabel).join(', ')}` : ''}`}
         words={session.words}
         skillFor={session.skillFor}
+        targets={session.targets}
         mode={mode}
         direction={settings.practiceDirection}
         onExit={() => setSession(null)}
@@ -133,6 +143,20 @@ export function PracticeScreen({ onGoToLearn, onGoToWords }: { onGoToLearn(): vo
             <input type="checkbox" checked={settings.autoExercise} onChange={(e) => updateSettings({ autoExercise: e.target.checked })} />
             <span>Choose exercises automatically</span>
           </label>
+          <Segmented
+            label="Words in practice"
+            value={settings.wordsInPractice}
+            onChange={(v) => updateSettings({ wordsInPractice: v })}
+            options={[
+              { value: 'off', label: 'Off' },
+              { value: 'some', label: 'Some' },
+              { value: 'lot', label: 'A lot' },
+            ]}
+          />
+          <p className="hint">
+            A character can be practised through one of its unlocked words (about 40% of the time with Some, 75% with A lot). A word answer
+            counts for its characters. Words that need work (missed or looked up) also come up on their own.
+          </p>
           {settings.autoExercise && (
             <>
               <Segmented

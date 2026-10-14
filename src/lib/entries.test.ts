@@ -96,3 +96,15 @@ describe('missing characters', () => {
     expect(detectKind(got[0])).toBe('char');
   });
 });
+
+describe('multiple-choice distractors', () => {
+  it('for a word, prefers words sharing a character with it', async () => {
+    const { distractorOrder } = await import('./entries');
+    const keep = <T,>(xs: readonly T[]) => [...xs];
+    const answer = w('电脑', false, { tags: ['L4'] });
+    const pool = [w('手', true, { tags: ['L4'] }), w('手机', false), w('电话', false), w('电影', false)];
+    expect(distractorOrder(answer, pool, keep).map((x) => x.hanzi)).toEqual(['电话', '电影', '手', '手机']);
+    // A character keeps the tag preference only.
+    expect(distractorOrder(w('电', true, { tags: ['L4'] }), pool, keep)[0].hanzi).toBe('手');
+  });
+});

@@ -212,7 +212,7 @@ export function withContext(steps: Step[], words: Map<string, Word>, world: Cont
     const ctx = w && skill ? contextCardFor(w, skill, world, { ...opts, sessionWords: later }) : null;
     if (ctx) {
       ctx.alsoIds?.forEach((id) => covered.add(id));
-      out.push({ id: s.id, card: ctx, scheduled: [ctx.skill] });
+      out.push({ id: s.id, card: ctx, scheduled: [ctx.skill], target: s.target });
     } else out.push(s);
   });
   return out;
@@ -223,4 +223,6 @@ export interface ContextStep {
   card: ContextCard;
   scheduled: Skill[];
   delayed?: boolean;
+  /** A word card: the character whose skill it reviews (see Step). */
+  target?: string;
 }

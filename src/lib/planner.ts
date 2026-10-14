@@ -141,6 +141,8 @@ export interface Step {
   scheduled: Skill[];
   /** Writing: the delayed recall a few cards later (blank grid only, not graded for the schedule). */
   delayed?: boolean;
+  /** A word card: the character (id) whose `scheduled` skills it reviews. */
+  target?: string;
 }
 
 /** The delayed recall of a writing card comes back this many cards later (at random within the range). */

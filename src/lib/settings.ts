@@ -26,6 +26,8 @@ export interface Settings {
   practiceSize: number;
   /** Practice: review words inside sentences (off / ~40% of eligible reviews / whenever possible). */
   useSentences: 'off' | 'some' | 'max';
+  /** Practice: do character reviews through their unlocked words (off / ~40% / ~75%), and add words that need work. */
+  wordsInPractice: 'off' | 'some' | 'lot';
   /** Learn mode: words taught per batch. */
   learnBatchSize: number;
   /** Learn mode: new words per day. */
@@ -65,6 +67,7 @@ const defaults: Settings = {
   autoExercise: true,
   practiceSize: 20,
   useSentences: 'some',
+  wordsInPractice: 'some',
   learnBatchSize: 6,
   learnDailyLimit: 15,
   learnTyping: false,

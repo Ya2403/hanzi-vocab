@@ -1,6 +1,7 @@
 import { autoSpeak } from '../lib/quiet';
 import { useRef, useState, type FormEvent } from 'react';
 import { checkChinese, type Check } from '../lib/answer';
+import { diffChars, normalizeZh } from '../lib/contextReview';
 import { Grade } from '../lib/srs';
 import { usePinyinVisibility } from '../lib/settings';
 import type { Word } from '../lib/types';
@@ -9,7 +10,8 @@ import { SpeakButton } from './SpeakButton';
 
 interface Props {
   word: Word;
-  onAnswer(quality: number): void;
+  /** `wrongChars`: the characters of the answer that were typed wrong or left out (a wrong answer). */
+  onAnswer(quality: number, wrongChars?: string[]): void;
 }
 
 const gradeOf: Record<Check['verdict'], number> = { correct: Grade.Good, close: Grade.Hard, wrong: Grade.Again };
@@ -40,7 +42,14 @@ export function Typing({ word, onAnswer }: Props) {
     if (!result) {
       if (input.trim()) check(input);
     } else {
-      onAnswer(gradeOf[result.verdict]);
+      // Which characters were wrong (so a word only counts against those characters).
+      const wrongChars =
+        result.verdict === 'wrong' && input.trim()
+          ? diffChars(normalizeZh(word.hanzi), normalizeZh(input))
+              .filter((p) => p.kind === 'missing' || p.kind === 'wrong')
+              .map((p) => p.ch)
+          : undefined;
+      onAnswer(gradeOf[result.verdict], wrongChars);
     }
   };
 
