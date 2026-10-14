@@ -3444,3 +3444,79 @@ body.in-session .view-switch {
   margin-top: 3px;
   min-width: 60px;
 }
+
+/* ---------- Choice exercises ---------- */
+.which-char {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.05em;
+}
+.blank-slot {
+  display: inline-block;
+  min-width: 1em;
+  border-bottom: 3px solid var(--accent);
+  line-height: 1.1;
+  text-align: center;
+}
+.blank-slot.ok {
+  color: var(--good);
+  border-color: var(--good);
+}
+.blank-slot.bad {
+  color: var(--bad);
+  border-color: var(--bad);
+}
+.small-meaning {
+  font-size: 1.05rem;
+}
+.which-char-answer {
+  margin-top: 6px;
+}
+.char-options {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.char-options .option-hanzi {
+  font-size: 1.6rem;
+}
+.chat-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.chat-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+.chat-row.b {
+  justify-content: flex-end;
+}
+.chat-bubble {
+  max-width: 80%;
+  padding: 8px 12px;
+  border-radius: 16px;
+  background: var(--surface-2);
+  font-family: var(--font-zh);
+  font-size: 1.15rem;
+  text-align: left;
+}
+.chat-row.a .chat-bubble {
+  border-bottom-left-radius: 4px;
+}
+.chat-row.b .chat-bubble {
+  border-bottom-right-radius: 4px;
+  background: var(--accent-soft);
+}
+.chat-bubble.empty {
+  min-width: 4em;
+  color: var(--muted);
+  border: 2px dashed var(--border);
+  background: transparent;
+}
+.chat-bubble.ok {
+  background: var(--good-soft);
+}
+.chat-bubble.bad {
+  background: var(--bad-soft);
+}

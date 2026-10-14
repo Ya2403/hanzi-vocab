@@ -6,6 +6,7 @@
 import { skillStrength, type Card, type Step } from './planner';
 import type { Links } from './sentences';
 import { isLearned, skillState } from './srs';
+import { CHAT_MIN_LINES } from './choiceExercises';
 import type { Dialogue, Sentence, Skill, Word } from './types';
 
 /** "Use sentences in reviews": never, about 40% of the eligible reviews, or whenever possible. */
@@ -14,7 +15,8 @@ export const SOME_SHARE = 0.4;
 /** At most this many other session words are graded on one read-and-check card. */
 export const MAX_ALSO = 2;
 
-export type ContextExercise = 'cloze' | 'reply' | 'read';
+/** cloze: fill the blank; reply: reply in the dialogue; read: read and check; chat: Complete the chat (pick the reply). */
+export type ContextExercise = 'cloze' | 'reply' | 'read' | 'chat';
 export type ContextPart = 'choice' | 'typing' | 'tiles' | 'check';
 
 export interface ContextCard {
@@ -170,11 +172,14 @@ export function contextCardFor(
   if (opts.use === 'some' && rnd() >= SOME_SHARE) return null;
   const st = skillStrength(skillState(w, skill, opts.on), w.learnedOn, opts.on);
   const replies = sentences.filter((s) => (world.lineOf(s.id)?.index ?? 0) > 0);
+  // Complete the chat: a reply line of a dialogue with at least 3 lines.
+  const chats = replies.filter((s) => (world.lineOf(s.id)?.lines.length ?? 0) >= CHAT_MIN_LINES);
   const pick = <T,>(xs: T[]) => xs[Math.min(xs.length - 1, Math.floor(rnd() * Math.min(xs.length, 3)))];
 
   if (st === 'weak') return { kind: 'context', ex: 'cloze', part: 'choice', skill, sentenceId: pick(sentences).id };
   if (st === 'medium') {
     if (skill === 'recall' && replies.length) return { kind: 'context', ex: 'reply', part: 'tiles', skill, sentenceId: pick(replies).id };
+    if (skill === 'meaning' && chats.length && rnd() < 0.5) return { kind: 'context', ex: 'chat', part: 'choice', skill, sentenceId: pick(chats).id };
     if (skill === 'meaning') {
       const s = pick(sentences);
       // Other session words in the same sentence are highlighted and graded too (a few at most).

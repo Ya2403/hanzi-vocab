@@ -22,6 +22,8 @@ import { entryKind, isWordEntry, recordWordAnswer } from '../lib/entries';
 import { targetChar } from '../lib/wordPractice';
 import { ContextCardView, type ContextResult } from './ContextCards';
 import { HanziText } from './HanziText';
+import { ChatChoice, WhichChar } from './ChoiceCards';
+import { loadHanziDict } from '../lib/hanziDict';
 
 export type { SessionMode } from '../lib/planner';
 
@@ -65,6 +67,11 @@ export function Session({ title, words: initialWords, mode, direction, skillFor,
   const { writingStyle, leechThreshold, showPinyin, choiceStyle, useSentences } = useSettings();
   const lineOf = useMemo(() => dialoguePositions(dialogues, sentences), [dialogues, sentences]);
 
+  // Look-alike distractors need the character data: load it early (it's cached offline).
+  useEffect(() => {
+    loadHanziDict().catch(() => {});
+  }, []);
+
   // Full-screen practice: the app header is hidden while a session is open (see .in-session in CSS).
   useEffect(() => {
     document.body.classList.add('in-session');
@@ -89,6 +96,9 @@ export function Session({ title, words: initialWords, mode, direction, skillFor,
     // Names: meaning only.
     if (entryKind(w) === 'name') return { id: w.id, card: { kind: 'single', skill: 'meaning', ex: 'choice', dir: 'zh-en' }, scheduled: ['meaning'], target };
     const base = skill ? { ...cardsFor(planned(w, target), [skill], opts)[0], scheduled: [skill] } : practiceCard(planned(w, target), direction, { ...opts, skill: k });
+    // A word's easy recall card: Which character? half of the time (the target character blanked).
+    if (target && base.card.kind === 'single' && base.card.ex === 'translate' && Math.random() < 0.5)
+      return { ...base, id: w.id, target, card: { ...base.card, ex: 'whichChar' } };
     return { ...base, id: w.id, target };
   };
   const [queue, setQueue] = useState<Item[]>(() => {
@@ -408,19 +418,25 @@ export function Session({ title, words: initialWords, mode, direction, skillFor,
     const pos = lineOf.get(current.card.sentenceId);
     const prevLine = pos && pos.index > 0 ? pos.lines[pos.index - 1] : undefined;
     const speakerOf = (id: string) => dialogues.flatMap((d) => d.lines).find((l) => l.sentenceId === id)?.speaker;
-    const ex = current.card.ex === 'cloze' ? 'fill the blank' : current.card.ex === 'reply' ? 'reply' : 'read and check';
+    const ex = { cloze: 'fill the blank', reply: 'reply', read: 'read and check', chat: 'complete the chat' }[current.card.ex];
+    const dialogue = dialogues.find((d) => d.lines.some((l) => l.sentenceId === current.card.sentenceId));
+    const contextCard = sentence && (
+      <ContextCardView
+        key={step}
+        card={current.card.ex === 'chat' ? { ...current.card, ex: 'read', part: 'check' } : current.card}
+        word={word}
+        sentence={sentence}
+        prev={prevLine && pos ? { sentence: prevLine, speaker: speakerOf(prevLine.id), lines: pos.lines } : undefined}
+        onAnswer={answerContext}
+      />
+    );
     return (
       <div className="session">
         {sessionBar(`${SKILL_LABEL[current.card.skill].toLowerCase()} · ${ex}`)}
-        {sentence ? (
-          <ContextCardView
-            key={step}
-            card={current.card}
-            word={word}
-            sentence={sentence}
-            prev={prevLine && pos ? { sentence: prevLine, speaker: speakerOf(prevLine.id), lines: pos.lines } : undefined}
-            onAnswer={answerContext}
-          />
+        {sentence && current.card.ex === 'chat' && dialogue && pos ? (
+          <ChatChoice key={step} dialogue={dialogue} lines={pos.lines} index={pos.index} onAnswer={(q) => answerContext({ q })} fallback={contextCard} />
+        ) : sentence ? (
+          contextCard
         ) : (
           <button className="btn" onClick={skip}>
             Skip (sentence not found)
@@ -444,9 +460,13 @@ export function Session({ title, words: initialWords, mode, direction, skillFor,
   else if (c.ex === 'writing') card = writingCard(answerOne(c.skill));
   else if (c.ex === 'listen') card = <ListenChoice key={step} word={word} pool={choicePool} onAnswer={answerOne('pinyin')} onCantListen={cantListen} />;
   else if (c.ex === 'typing') card = <Typing key={step} word={word} onAnswer={answerOne(c.skill)} />;
+  else if (c.ex === 'whichChar')
+    card = <WhichChar key={step} word={word} target={current.target ? wordOf(current.target)?.hanzi : undefined} onAnswer={answerOne(c.skill)} onSkip={skip} />;
+  else if (c.ex === 'translate') card = <MultipleChoice key={step} word={word} allWords={choicePool} direction="en-zh" variant="translate" onAnswer={answerOne(c.skill)} />;
   else card = <MultipleChoice key={step} word={word} allWords={choicePool} direction={c.dir} onAnswer={answerOne(c.skill)} />;
 
-  const label = matchRound ? 'match pairs' : testedSkills(c).map((k) => SKILL_LABEL[k].toLowerCase()).join(' + ');
+  const exLabel = c.kind === 'single' && c.ex === 'whichChar' ? ' · which character' : c.kind === 'single' && c.ex === 'translate' ? ' · translation' : '';
+  const label = matchRound ? 'match pairs' : testedSkills(c).map((k) => SKILL_LABEL[k].toLowerCase()).join(' + ') + exLabel;
 
   return (
     <div className="session">

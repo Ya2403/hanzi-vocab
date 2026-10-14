@@ -37,6 +37,9 @@ export function loadHanziDict(): Promise<HanziDict> {
 
 export const hanziDictCached = () => isCached(dictUrl, CACHE_NAME);
 
+/** The character data if it has been loaded in this session (else null). */
+export const hanziDictNow = (): HanziDict | null => loaded;
+
 export type DictStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 /** Loads the dictionary once `enabled` becomes true. */

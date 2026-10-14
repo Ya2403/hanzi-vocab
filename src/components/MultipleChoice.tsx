@@ -10,12 +10,16 @@ import { SpeakButton } from './SpeakButton';
 import { Icon } from './Icon';
 import { HanziText } from './HanziText';
 import { distractorOrder } from '../lib/entries';
+import { translationDistractors } from '../lib/choiceExercises';
+import { hanziDictNow } from '../lib/hanziDict';
 
 interface Props {
   word: Word;
   /** Pool to draw distractors from. */
   allWords: Word[];
   direction: CardDirection;
+  /** "Select the correct translation": English → 3 Chinese options with look-alike distractors. */
+  variant?: 'translate';
   onAnswer(quality: number): void;
 }
 
@@ -37,7 +41,13 @@ function otherWords(word: Word, pool: Word[]): Word[] {
   return distractorOrder(word, candidates, shuffle);
 }
 
-function buildOptions(word: Word, pool: Word[], direction: CardDirection, toneless: boolean): Option[] {
+function buildOptions(word: Word, pool: Word[], direction: CardDirection, toneless: boolean, variant?: 'translate'): Option[] {
+  if (variant === 'translate') {
+    return shuffle([
+      { key: word.id, label: word.hanzi, sub: word.pinyin, correct: true },
+      ...translationDistractors(word, pool, hanziDictNow(), 2).map((w) => ({ key: w.id, label: w.hanzi, sub: w.pinyin, correct: false })),
+    ]);
+  }
   if (direction === 'zh-py') {
     // Similar-sounding pinyin, never the same syllables with other tones.
     const shown = (p: string) => (toneless ? stripTones(p) : p);
@@ -68,9 +78,9 @@ const KICKER: Record<CardDirection, string> = {
   'zh-py': 'Choose the pinyin',
 };
 
-export function MultipleChoice({ word, allWords, direction, onAnswer }: Props) {
+export function MultipleChoice({ word, allWords, direction, variant, onAnswer }: Props) {
   // Options are fixed for the lifetime of this card (the parent re-keys per card).
-  const [options] = useState(() => buildOptions(word, allWords, direction, getSettings().tones === 'ignore'));
+  const [options] = useState(() => buildOptions(word, allWords, direction, getSettings().tones === 'ignore', variant));
   const [picked, setPicked] = useState<string | null>(null);
   const answered = picked !== null;
   const correct = options.find((o) => o.key === picked)?.correct ?? false;
@@ -108,7 +118,7 @@ export function MultipleChoice({ word, allWords, direction, onAnswer }: Props) {
   return (
     <div className="practice">
       <div className="card prompt-card">
-        <div className="card-kicker">{KICKER[direction]}</div>
+        <div className="card-kicker">{variant === 'translate' ? 'Select the correct translation' : KICKER[direction]}</div>
         {direction === 'en-zh' ? (
           <div className="prompt-meaning">{word.meaning}</div>
         ) : (

@@ -10,7 +10,11 @@ import { accuracy, activeSkills, isLearned, SKILL_DIR, skillState } from './srs'
 import type { CardDirection, Direction, PracticeMode, Skill, SkillState, Word } from './types';
 
 export type Strength = 'weak' | 'medium' | 'strong';
-export type Exercise = 'choice' | 'listen' | 'typing' | 'writing';
+/**
+ * choice: multiple choice; translate: Select the correct translation (EN → 3 Chinese options, look-
+ * alikes); whichChar: Which character? (a word with one character blanked); listen, typing, writing.
+ */
+export type Exercise = 'choice' | 'translate' | 'whichChar' | 'listen' | 'typing' | 'writing';
 
 export interface PlannedCard {
   ex: Exercise;
@@ -74,8 +78,9 @@ export function chooseExercise(w: Word, skill: Skill, opts: { listening: boolean
   // Meaning is always recognised from options (typing English translations isn't useful practice).
   if (skill === 'meaning') return { ex: 'choice', dir };
   const st = skillStrength(skillState(w, skill, opts.on), w.learnedOn, opts.on);
-  // Recall: type the characters once it isn't weak any more.
+  // Recall: type the characters once it isn't weak any more; while weak, Select the correct translation.
   if (skill === 'recall' && st !== 'weak') return { ex: 'typing', dir };
+  if (skill === 'recall') return { ex: 'translate', dir };
   if (skill === 'pinyin' && st !== 'weak' && opts.listening && rnd() < 0.5) return { ex: 'listen', dir };
   return { ex: 'choice', dir };
 }
@@ -226,6 +231,7 @@ export function practiceCard(w: Word, direction: Direction, opts: PlanOpts & { s
 export function retryOf(step: Step): Step {
   const { card } = step;
   if (card.kind === 'single' && (card.ex === 'typing' || card.ex === 'listen')) return { ...step, card: { ...card, ex: 'choice' } };
+  if (card.kind === 'single' && card.ex === 'whichChar') return { ...step, card: { ...card, ex: 'translate' } };
   return step;
 }
 

@@ -53,7 +53,7 @@ describe('exercise choice per skill', () => {
   it("gives weak skills multiple choice in the skill's direction", () => {
     expect(chooseExercise(weak, 'meaning', { listening: true, on: ON })).toEqual({ ex: 'choice', dir: 'zh-en' });
     expect(chooseExercise(weak, 'pinyin', { listening: true, on: ON })).toEqual({ ex: 'choice', dir: 'zh-py' });
-    expect(chooseExercise(weak, 'recall', { listening: true, on: ON })).toEqual({ ex: 'choice', dir: 'en-zh' });
+    expect(chooseExercise(weak, 'recall', { listening: true, on: ON })).toEqual({ ex: 'translate', dir: 'en-zh' }); // Select the correct translation
   });
 
   it('gives medium pinyin listening sometimes (when audio is available)', () => {
