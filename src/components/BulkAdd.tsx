@@ -11,7 +11,7 @@ const PREVIEW_LIMIT = 200;
 export function BulkAdd({ onClose }: { onClose(): void }) {
   const { words, sentences, dialogues, addWords, updateWords, importData } = useStore();
   /** What to do with pasted words that are already in the list. */
-  const [mode, setMode] = useState<'new' | 'update' | 'replace'>('new');
+  const [mode, setMode] = useState<'tags' | 'new' | 'update' | 'replace'>('tags');
   const [text, setText] = useState('');
   const [extraTags, setExtraTags] = useState('');
   const [copied, setCopied] = useState<'ok' | 'failed' | null>(null);
@@ -40,7 +40,14 @@ export function BulkAdd({ onClose }: { onClose(): void }) {
   // Replace: every current word that isn't in the pasted list gets deleted.
   const toDelete = mode === 'replace' ? words.filter((w) => !pasted.has(w.hanzi)).length : 0;
   const skipped = mode === 'new' ? preview.length - fresh.length : preview.length - fresh.length - existingRows.length;
-  const count = mode === 'new' ? fresh.length : fresh.length + existingRows.length;
+  // Add tags only: existing entries that would actually get a new tag.
+  const extraTagList = parseTagText(extraTags);
+  const newTagsFor = (w: Word, p: NewWord) => {
+    const have = new Set(w.tags.map((t) => t.toLowerCase()));
+    return [...p.tags, ...extraTagList].filter((t) => !have.has(t.toLowerCase()));
+  };
+  const tagged = mode === 'tags' ? existingRows.filter((r) => newTagsFor(byHanzi.get(r.word.hanzi)!, r.word).length > 0) : [];
+  const count = mode === 'new' ? fresh.length : mode === 'tags' ? fresh.length + tagged.length : fresh.length + existingRows.length;
 
   const copyPrompt = async () => {
     try {
@@ -85,6 +92,15 @@ export function BulkAdd({ onClose }: { onClose(): void }) {
       });
       if (mode === 'new') {
         await addWords(fresh.map((r) => input(r.word)));
+      } else if (mode === 'tags') {
+        // Existing entries keep everything (meaning, progress…) and only get the new tags.
+        await updateWords(
+          tagged.map((r) => {
+            const w = byHanzi.get(r.word.hanzi)!;
+            return { ...w, tags: [...w.tags, ...newTagsFor(w, r.word)] };
+          }),
+        );
+        if (fresh.length) await addWords(fresh.map((r) => input(r.word)));
       } else if (mode === 'update') {
         await updateWords(existingRows.map((r) => merged(byHanzi.get(r.word.hanzi)!, r.word)));
         if (fresh.length) await addWords(fresh.map((r) => input(r.word)));
@@ -172,13 +188,16 @@ export function BulkAdd({ onClose }: { onClose(): void }) {
           value={mode}
           onChange={setMode}
           options={[
-            { value: 'new', label: 'Skip them' },
-            { value: 'update', label: 'Update them' },
-            { value: 'replace', label: 'Replace whole list' },
+            { value: 'tags', label: 'Add tags only' },
+            { value: 'new', label: 'Skip' },
+            { value: 'update', label: 'Update' },
+            { value: 'replace', label: 'Replace all' },
           ]}
         />
         <p className="hint">
-          {mode === 'new'
+          {mode === 'tags'
+            ? 'New words are added; existing ones keep everything (meaning, examples, progress) and only get the new tags.'
+            : mode === 'new'
             ? 'Only words that aren’t in your list yet are added.'
             : mode === 'update'
               ? 'New words are added; existing ones get the pasted pinyin, meaning, example and tags. Study progress is kept.'
@@ -197,12 +216,17 @@ export function BulkAdd({ onClose }: { onClose(): void }) {
             <p className="small">
               <b>{fresh.length}</b> new
               {existingRows.length > 0 &&
-                (mode === 'new' ? (
+                (mode === 'tags' ? (
+                  <span className="muted">
+                    {' '}
+                    · {existingRows.length} already in your list ({tagged.length ? `${tagged.length} get new tags` : 'no new tags'})
+                  </span>
+                ) : mode === 'new' ? (
                   <span className="muted"> · {existingRows.length} already in your list (skipped)</span>
                 ) : (
                   <span> · {existingRows.length} already in your list (updated, progress kept)</span>
                 ))}
-              {mode !== 'new' && skipped > 0 && <span className="muted"> · {skipped} repeated (skipped)</span>}
+              {mode !== 'new' && mode !== 'tags' && skipped > 0 && <span className="muted"> · {skipped} repeated (skipped)</span>}
               {mode === 'replace' && toDelete > 0 && <span className="warn-text"> · {toDelete} other words will be deleted</span>}
               {errors.length > 0 && <span className="warn-text"> · {errors.length} line{errors.length > 1 ? 's' : ''} not understood</span>}
             </p>
@@ -244,6 +268,8 @@ export function BulkAdd({ onClose }: { onClose(): void }) {
               ? `Replace list (${count} words)`
               : mode === 'update' && existingRows.length
                 ? `Add ${fresh.length} · update ${existingRows.length}`
+                : mode === 'tags' && tagged.length
+                  ? `Add ${fresh.length} · tag ${tagged.length}`
                 : `Add ${fresh.length || ''} word${fresh.length === 1 ? '' : 's'}`}
           </button>
         </div>

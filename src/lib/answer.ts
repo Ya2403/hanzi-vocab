@@ -91,12 +91,23 @@ export function checkPinyin(input: string, answer: string, tones: ToneMode = 'ig
   };
 }
 
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * Typed characters against an entry: only the characters count, and a "…" placeholder in the
+ * entry stands for anything (对…说 accepts 对说 and 对他说).
+ */
+export function hanziMatches(typed: string, hanzi: string): boolean {
+  const got = stripHanzi(typed);
+  const parts = hanzi.split('…').map(stripHanzi);
+  if (parts.length === 1) return got === parts[0];
+  return new RegExp(`^${parts.map(escapeRe).join('.*')}$`, 'u').test(got);
+}
+
 /** Typed hanzi or pinyin against a word. */
 export function checkChinese(input: string, word: Word, tones: ToneMode = 'required'): Check {
   const text = input.trim();
   if (!text) return { verdict: 'wrong' };
-  if (CJK.test(text)) {
-    return stripHanzi(text) === stripHanzi(word.hanzi) ? { verdict: 'correct' } : { verdict: 'wrong' };
-  }
+  if (CJK.test(text)) return hanziMatches(text, word.hanzi) ? { verdict: 'correct' } : { verdict: 'wrong' };
   return checkPinyin(text, word.pinyin, tones);
 }

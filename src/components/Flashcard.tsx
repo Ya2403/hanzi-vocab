@@ -6,6 +6,7 @@ import type { CardDirection, Skill, Word } from '../lib/types';
 import { SpeakButton } from './SpeakButton';
 import { Breakdown } from './Breakdown';
 import { WordExamples, NotesBox } from './WordExtras';
+import { HanziText } from './HanziText';
 
 interface Props {
   word: Word;
@@ -93,7 +94,7 @@ export function Flashcard({ word, direction, skills, onAnswer }: Props) {
     direction !== 'en-zh' ? (
       <>
         <div className={`prompt-hanzi ${canReveal ? 'can-reveal' : ''}`} lang="zh-CN" {...hanziTap}>
-          {word.hanzi}
+          <HanziText text={word.hanzi} />
         </div>
         {pinyinLine}
       </>
@@ -114,7 +115,7 @@ export function Flashcard({ word, direction, skills, onAnswer }: Props) {
               {direction === 'en-zh' && (
                 <>
                   <span className={`answer-hanzi ${canReveal ? 'can-reveal' : ''}`} lang="zh-CN" {...hanziTap}>
-                    {word.hanzi}
+                    <HanziText text={word.hanzi} />
                   </span>
                   {pinyinLine}
                 </>

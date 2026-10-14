@@ -4,7 +4,9 @@ import { normalizeSearch, toPinyin } from '../lib/pinyin';
 import { isLeech, isNew, leechSkills, LEECH_FILTER } from '../lib/srs';
 import { strength, wordPriority, type Strength } from '../lib/planner';
 import { updateSettings, useSettings } from '../lib/settings';
-import { LeechBadge, useWordSentences } from '../components/WordExtras';
+import { LeechBadge, NeedsTranslationButton, StopClicks, useWordSentences } from '../components/WordExtras';
+import { FillTranslations } from '../components/SentenceBulk';
+import { HanziText } from '../components/HanziText';
 import { sampleWords } from '../lib/sample';
 import type { Word } from '../lib/types';
 import { Icon } from '../components/Icon';
@@ -245,6 +247,7 @@ function WordRow({
   onDelete(): void;
 }) {
   const [example] = useWordSentences(word);
+  const [filling, setFilling] = useState(false);
   const status = isNew(word) ? (
     <span className="status new">new</span>
   ) : (
@@ -259,14 +262,26 @@ function WordRow({
     <li className="word-row card">
       <div className="word-main" onClick={onOpen}>
         <div className="word-head">
-          <span className="hanzi" lang="zh-CN">{word.hanzi}</span>
+          <span className="hanzi" lang="zh-CN">
+            <HanziText text={word.hanzi} />
+          </span>
           {showPinyin && <span className="pinyin">{word.pinyin}</span>}
         </div>
         <div className="meaning">{word.meaning}</div>
         {example && (
-          <div className="example" lang="zh-CN">
-            {example.zh}
+          <div className="example">
+            <span lang="zh-CN">{example.zh}</span>{' '}
+            {example.translation.trim() ? (
+              <span className="example-translation">{example.translation}</span>
+            ) : (
+              <NeedsTranslationButton onOpen={() => setFilling(true)} />
+            )}
           </div>
+        )}
+        {filling && (
+          <StopClicks>
+            <FillTranslations onClose={() => setFilling(false)} />
+          </StopClicks>
         )}
         <div className="word-meta">
           {isLeech(word) && <LeechBadge skills={leechSkills(word)} />}

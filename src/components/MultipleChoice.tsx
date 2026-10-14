@@ -8,6 +8,7 @@ import { shuffle } from '../lib/words';
 import type { CardDirection, Word } from '../lib/types';
 import { SpeakButton } from './SpeakButton';
 import { Icon } from './Icon';
+import { HanziText } from './HanziText';
 
 interface Props {
   word: Word;
@@ -119,7 +120,7 @@ export function MultipleChoice({ word, allWords, direction, onAnswer }: Props) {
               onClick={canReveal ? () => setRevealed(true) : undefined}
               title={canReveal ? 'Tap to show pinyin' : undefined}
             >
-              {word.hanzi}
+              <HanziText text={word.hanzi} />
             </div>
             {pinyinShown ? (
               <div className="pinyin big">{word.pinyin}</div>
@@ -141,7 +142,7 @@ export function MultipleChoice({ word, allWords, direction, onAnswer }: Props) {
               {direction === 'en-zh' ? (
                 <span className="option-text">
                   <span className="option-hanzi" lang="zh-CN">
-                    {o.label}
+                    <HanziText text={o.label} />
                   </span>
                   {(answered ? pv.answer : pv.question) && <span className="pinyin">{o.sub}</span>}
                 </span>
@@ -166,7 +167,7 @@ export function MultipleChoice({ word, allWords, direction, onAnswer }: Props) {
               </>
             ) : (
               <>
-                It’s <b lang="zh-CN">{word.hanzi}</b>
+                It’s <b lang="zh-CN"><HanziText text={word.hanzi} /></b>
                 {pinyinShown && ` (${word.pinyin})`} — {word.meaning}
               </>
             )}

@@ -4,6 +4,7 @@ import { Grade } from '../lib/srs';
 import { usePinyinVisibility } from '../lib/settings';
 import { shuffle } from '../lib/words';
 import type { CardDirection, Word } from '../lib/types';
+import { HanziText } from './HanziText';
 
 interface Props {
   /** The words in this round (2–6 works best). */
@@ -103,7 +104,7 @@ export function MatchPairs({ words, direction, onDone }: Props) {
                 ) : (
                   <>
                     <span className="match-hanzi" lang="zh-CN">
-                      {w.hanzi}
+                      <HanziText text={w.hanzi} />
                     </span>
                     {showPinyin && direction === 'zh-en' && <span className="pinyin">{w.pinyin}</span>}
                   </>
@@ -117,7 +118,7 @@ export function MatchPairs({ words, direction, onDone }: Props) {
                 {direction === 'en-zh' ? (
                   <>
                     <span className="match-hanzi" lang="zh-CN">
-                      {w.hanzi}
+                      <HanziText text={w.hanzi} />
                     </span>
                     {showPinyin && <span className="pinyin">{w.pinyin}</span>}
                   </>

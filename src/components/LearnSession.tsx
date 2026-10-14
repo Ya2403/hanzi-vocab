@@ -13,6 +13,7 @@ import { endQuietSession, isQuiet, startQuiet } from '../lib/quiet';
 import { ListenChoice, listeningAvailable, TeachCard } from './LearnCards';
 import { MultipleChoice } from './MultipleChoice';
 import { Typing } from './Typing';
+import { HanziText } from './HanziText';
 
 type Round = 'meaning' | 'listen' | 'produce' | 'typing';
 
@@ -211,7 +212,7 @@ export function LearnSession({
           <ul className="missed">
             {learned.map((w) => (
               <li key={w.id}>
-                <span className="hanzi" lang="zh-CN">{w.hanzi}</span>
+                <span className="hanzi" lang="zh-CN"><HanziText text={w.hanzi} /></span>
                 <span className="pinyin">{w.pinyin}</span>
                 <span className="meaning">{w.meaning}</span>
               </li>
@@ -323,7 +324,7 @@ export function LearnSession({
         />
       )}
       {round === 'produce' && <MultipleChoice key={step} word={w} allWords={roundPool} direction="en-zh" onAnswer={answer} />}
-      {round === 'typing' && <Typing key={step} word={w} direction="en-zh" onAnswer={answer} />}
+      {round === 'typing' && <Typing key={step} word={w} onAnswer={answer} />}
     </div>
   );
 }

@@ -62,9 +62,10 @@ describe('exercise choice per skill', () => {
     expect(chooseExercise(medium, 'pinyin', { listening: false, rnd: fixed(0.1), on: ON }).ex).toBe('choice');
   });
 
-  it('types recall once it is not weak, pinyin once strong; meaning is always multiple choice', () => {
+  it('types recall once it is not weak; pinyin and meaning are never typed', () => {
     expect(chooseExercise(medium, 'recall', { listening: true, on: ON })).toEqual({ ex: 'typing', dir: 'en-zh' });
-    expect(chooseExercise(strong, 'pinyin', { listening: true, on: ON })).toEqual({ ex: 'typing', dir: 'zh-py' });
+    expect(chooseExercise(strong, 'pinyin', { listening: true, on: ON, rnd: () => 0.9 })).toEqual({ ex: 'choice', dir: 'zh-py' });
+    expect(chooseExercise(strong, 'pinyin', { listening: true, on: ON, rnd: () => 0 })).toEqual({ ex: 'listen', dir: 'zh-py' });
     expect(chooseExercise(strong, 'meaning', { listening: true, on: ON })).toEqual({ ex: 'choice', dir: 'zh-en' });
   });
 
@@ -81,7 +82,7 @@ describe('cards', () => {
     const word = w('好', { reps: 1, interval: 1 });
     expect(cardsFor(word, ['pinyin'], opts)[0].card).toEqual({ kind: 'pair', p: 'choice' });
     const strongPinyin = w('好', { reps: 5, interval: 30 });
-    expect(cardsFor(strongPinyin, ['meaning'], opts)[0].card).toEqual({ kind: 'pair', p: 'typing' });
+    expect(cardsFor(strongPinyin, ['meaning'], opts)[0].card).toEqual({ kind: 'pair', p: 'choice' });
   });
 
   it('gives recall its own card; flashcards have rows per skill', () => {

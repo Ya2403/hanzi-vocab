@@ -1,45 +1,35 @@
 import { autoSpeak } from '../lib/quiet';
 import { useRef, useState, type FormEvent } from 'react';
-import { checkChinese, checkMeaning, checkPinyin, type Check } from '../lib/answer';
+import { checkChinese, type Check } from '../lib/answer';
 import { Grade } from '../lib/srs';
-import { usePinyinVisibility, useSettings } from '../lib/settings';
-import type { CardDirection, Word } from '../lib/types';
+import { usePinyinVisibility } from '../lib/settings';
+import type { Word } from '../lib/types';
+import { HanziText } from './HanziText';
 import { SpeakButton } from './SpeakButton';
 
 interface Props {
   word: Word;
-  direction: CardDirection;
-  /** toneError: typed pinyin had the right syllables but wrong tones (Tones setting not "ignore"). */
-  onAnswer(quality: number, toneError?: boolean): void;
+  onAnswer(quality: number): void;
 }
 
 const gradeOf: Record<Check['verdict'], number> = { correct: Grade.Good, close: Grade.Hard, wrong: Grade.Again };
 
-export function Typing({ word, direction, onAnswer }: Props) {
+/** EN → 中: see the meaning, type the characters (with the phone's Chinese keyboard). */
+export function Typing({ word, onAnswer }: Props) {
   const [input, setInput] = useState('');
   const [result, setResult] = useState<Check | null>(null);
-  const pv = usePinyinVisibility(direction);
-  const { tones } = useSettings();
+  const pv = usePinyinVisibility('en-zh');
   const [revealed, setRevealed] = useState(false);
   const pinyinShown = revealed || (result ? pv.answer : pv.question);
   const inputRef = useRef<HTMLInputElement>(null);
-  const toChinese = direction === 'en-zh';
-  const toPinyinDir = direction === 'zh-py';
   const [hint, setHint] = useState<string | null>(null);
-  // In 中 → 拼音 the pinyin is the answer, so it can't be revealed early.
-  const canReveal = !pinyinShown && !toPinyinDir;
 
   const check = (answer: string) => {
-    if (toPinyinDir && /[㐀-鿿]/.test(answer)) {
-      setHint('Type the pinyin, e.g. ni3 hao3 or nǐ hǎo.');
-      return;
-    }
-    if (toChinese && !/[㐀-鿿]/.test(answer)) {
+    if (!/[㐀-鿿]/.test(answer)) {
       setHint('Type the characters (汉字) — switch to a Chinese keyboard, e.g. Chinese pinyin input.');
       return;
     }
-    const r = toChinese ? checkChinese(answer, word, tones) : toPinyinDir ? checkPinyin(answer, word.pinyin, tones) : checkMeaning(answer, word.meaning);
-    setResult(r);
+    setResult(checkChinese(answer, word));
     autoSpeak(word.hanzi);
     // Keep focus in the field so Enter / the keyboard's Go button continues.
     inputRef.current?.focus();
@@ -50,7 +40,7 @@ export function Typing({ word, direction, onAnswer }: Props) {
     if (!result) {
       if (input.trim()) check(input);
     } else {
-      onAnswer(gradeOf[result.verdict], !!result.toneError && tones !== 'ignore');
+      onAnswer(gradeOf[result.verdict]);
     }
   };
 
@@ -62,28 +52,8 @@ export function Typing({ word, direction, onAnswer }: Props) {
   return (
     <div className="practice">
       <div className="card prompt-card">
-        <div className="card-kicker">
-          {toChinese ? 'Type the Chinese characters' : toPinyinDir ? 'Type the pinyin' : 'Type the meaning'}
-        </div>
-        {toChinese ? (
-          <div className="prompt-meaning">{word.meaning}</div>
-        ) : (
-          <>
-            <div
-              className={`prompt-hanzi ${canReveal ? 'can-reveal' : ''}`}
-              lang="zh-CN"
-              onClick={canReveal ? () => setRevealed(true) : undefined}
-              title={canReveal ? 'Tap to show pinyin' : undefined}
-            >
-              {word.hanzi}
-            </div>
-            {pinyinShown ? (
-              <div className="pinyin big">{word.pinyin}</div>
-            ) : canReveal ? (
-              <div className="reveal-hint">tap the characters for pinyin</div>
-            ) : null}
-          </>
-        )}
+        <div className="card-kicker">Type the Chinese characters</div>
+        <div className="prompt-meaning">{word.meaning}</div>
       </div>
 
       <form className="typing-form" onSubmit={submit}>
@@ -96,8 +66,8 @@ export function Typing({ word, direction, onAnswer }: Props) {
             setHint(null);
           }}
           readOnly={result !== null}
-          placeholder={toChinese ? '汉字' : toPinyinDir ? (tones === 'ignore' ? 'ni hao' : 'ni3 hao3 / nǐ hǎo') : 'meaning'}
-          lang={toChinese ? 'zh-CN' : 'en'}
+          placeholder="汉字"
+          lang="zh-CN"
           autoFocus
           autoComplete="off"
           autoCorrect="off"
@@ -132,7 +102,7 @@ export function Typing({ word, direction, onAnswer }: Props) {
                   onClick={pinyinShown ? undefined : () => setRevealed(true)}
                   title={pinyinShown ? undefined : 'Tap to show pinyin'}
                 >
-                  {word.hanzi}
+                  <HanziText text={word.hanzi} />
                 </span>
                 {pinyinShown ? <span className="pinyin">{word.pinyin}</span> : <span className="reveal-hint">tap for pinyin</span>}
                 <SpeakButton text={word.hanzi} />

@@ -10,6 +10,7 @@ import type { Word } from '../lib/types';
 import { Icon } from './Icon';
 import { SpeakButton } from './SpeakButton';
 import { WordExamples, NotesBox } from './WordExtras';
+import { HanziText } from './HanziText';
 
 /** Play once when a card appears (respecting the auto-play setting), even under StrictMode. */
 function useAutoPlay(text: string) {
@@ -80,7 +81,7 @@ export function TeachCard({ word, onDone }: { word: Word; onDone(): void }) {
         <div className="card-kicker">{radical ? 'New component' : 'New word'}</div>
         <div className="teach-head">
           <span className="teach-hanzi" lang="zh-CN">
-            {word.hanzi}
+            <HanziText text={word.hanzi} />
           </span>
           <SpeakButton text={word.hanzi} size={26} />
         </div>
@@ -149,7 +150,7 @@ export function ListenChoice({
               <span className="option-key">{i + 1}</span>
               <span className="option-text">
                 <span className="option-hanzi" lang="zh-CN">
-                  {o.hanzi}
+                  <HanziText text={o.hanzi} />
                 </span>
               </span>
               {state === 'correct' && <Icon name="check" />}

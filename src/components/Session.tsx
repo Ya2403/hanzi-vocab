@@ -19,6 +19,7 @@ import { dialoguePositions, withContext, type ContextStep } from '../lib/context
 import { retrievability } from '../lib/fsrs';
 import { RUSTY_RETRIEVABILITY } from '../lib/planner';
 import { ContextCardView, type ContextResult } from './ContextCards';
+import { HanziText } from './HanziText';
 
 export type { SessionMode } from '../lib/planner';
 
@@ -31,7 +32,7 @@ interface Props {
   direction: Direction;
   /** Automatic mode: the skill to test per word (its highest-priority one), else picked here. */
   skillFor?: Map<string, Skill>;
-  /** Test this skill on every word (e.g. pinyin for "Tones to practice"). */
+  /** Test this skill on every word. */
   skill?: Skill;
   /** Leave early (✕). */
   onExit(): void;
@@ -74,13 +75,8 @@ export function Session({ title, words: initialWords, mode, direction, skillFor,
   const [leech, setLeech] = useState<{ id: string; lapses: number; skill: Skill } | null>(null);
   const [queue, setQueue] = useState<Item[]>(() => {
     const steps = spreadSteps(
-      initialWords.map((w): Step =>
-        skill === 'pinyin'
-          ? // Tone practice: type the pinyin, so the tones are really checked.
-            { id: w.id, card: { kind: 'single', skill, ex: 'typing', dir: 'zh-py' }, scheduled: [skill] }
-          : skill
-            ? { ...cardsFor(w, [skill], planOpts)[0], scheduled: [skill] }
-            : practiceCard(w, direction, { ...planOpts, skill: skillFor?.get(w.id) }),
+      initialWords.map(
+        (w): Step => (skill ? { ...cardsFor(w, [skill], planOpts)[0], scheduled: [skill] } : practiceCard(w, direction, { ...planOpts, skill: skillFor?.get(w.id) })),
       ),
     );
     // Automatic mode: some word reviews happen in a sentence that contains the word.
@@ -281,7 +277,7 @@ export function Session({ title, words: initialWords, mode, direction, skillFor,
             <ul className="missed">
               {missed.map((w) => (
                 <li key={w.id}>
-                  <span className="hanzi" lang="zh-CN">{w.hanzi}</span>
+                  <span className="hanzi" lang="zh-CN"><HanziText text={w.hanzi} /></span>
                   {pinyin.answer && <span className="pinyin">{w.pinyin}</span>}
                   <span className="meaning">{w.meaning}</span>
                 </li>
@@ -372,11 +368,11 @@ export function Session({ title, words: initialWords, mode, direction, skillFor,
     const batch = matchSteps.map((s) => wordOf(s.id)).filter((w): w is Word => !!w);
     card = <MatchPairs key={step} words={batch} direction={c.kind === 'single' ? c.dir : 'zh-en'} onDone={answerBatch} />;
   } else if (c.kind === 'pair') {
-    card = <TwoStepCard key={step} word={word} pool={choicePool} pinyinEx={c.p} onDone={(r) => answer({ meaning: r.meaning, pinyin: r.pinyin }, r.toneError)} />;
+    card = <TwoStepCard key={step} word={word} pool={choicePool} onDone={(r) => answer({ meaning: r.meaning, pinyin: r.pinyin }, r.toneError)} />;
   } else if (c.kind === 'flash') card = <Flashcard key={step} word={word} direction={c.dir} skills={c.skills} onAnswer={answer} />;
   else if (c.ex === 'writing') card = writingCard(answerOne(c.skill));
   else if (c.ex === 'listen') card = <ListenChoice key={step} word={word} pool={choicePool} onAnswer={answerOne('pinyin')} onCantListen={cantListen} />;
-  else if (c.ex === 'typing') card = <Typing key={step} word={word} direction={c.dir} onAnswer={answerOne(c.skill)} />;
+  else if (c.ex === 'typing') card = <Typing key={step} word={word} onAnswer={answerOne(c.skill)} />;
   else card = <MultipleChoice key={step} word={word} allWords={choicePool} direction={c.dir} onAnswer={answerOne(c.skill)} />;
 
   const label = matchRound ? 'match pairs' : testedSkills(c).map((k) => SKILL_LABEL[k].toLowerCase()).join(' + ');

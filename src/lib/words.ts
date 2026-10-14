@@ -8,7 +8,7 @@ export function newId(): string {
 export function cleanInput(input: WordInput): WordInput {
   const notes = input.notes?.trim();
   return {
-    hanzi: input.hanzi.trim(),
+    hanzi: normalizePlaceholders(input.hanzi.trim()),
     pinyin: input.pinyin.trim().replace(/\s+/g, ' '),
     meaning: input.meaning.trim(),
     notes: notes || undefined,
@@ -48,3 +48,16 @@ export function shuffle<T>(items: readonly T[]): T[] {
   }
   return a;
 }
+
+// ---------- Placeholders ----------
+
+/** "…" in an entry stands for someone/something: 对…说, 给…打电话. */
+export const PLACEHOLDER = '…';
+
+/** "...", "⋯", "……" and "。。。" typed in an entry all become one "…". */
+export const normalizePlaceholders = (s: string): string => s.replace(/\.{2,}|。{2,}|⋯+|…+/g, PLACEHOLDER);
+
+export const hasPlaceholder = (s: string): boolean => s.includes(PLACEHOLDER);
+
+/** The text with placeholders removed (for audio, matching and character lists). */
+export const withoutPlaceholders = (s: string): string => s.split(PLACEHOLDER).join('');

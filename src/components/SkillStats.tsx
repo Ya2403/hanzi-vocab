@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 import { useStore } from '../store';
-import { useSettings } from '../lib/settings';
-import { readableStats, strengthByTag, strengthCounts, toneTrouble } from '../lib/stats';
+import { readableStats, strengthByTag, strengthCounts } from '../lib/stats';
 import type { Word } from '../lib/types';
 
 /** A small stacked bar: weak / medium / strong. */
@@ -17,12 +16,10 @@ function StrengthBar({ weak, medium, strong }: { weak: number; medium: number; s
   );
 }
 
-/** Words by strength overall and per tag, rusty words, and (with tones on) the words to practise tones on. */
-export function SkillStats({ words, onPracticeTones }: { words: Word[]; onPracticeTones(list: Word[]): void }) {
-  const { tones } = useSettings();
+/** Words by strength overall and per tag, and rusty words. */
+export function SkillStats({ words }: { words: Word[] }) {
   const all = useMemo(() => strengthCounts(words), [words]);
   const tags = useMemo(() => strengthByTag(words), [words]);
-  const trouble = useMemo(() => toneTrouble(words), [words]);
 
   return (
     <div className="card skill-stats">
@@ -80,30 +77,6 @@ export function SkillStats({ words, onPracticeTones }: { words: Word[]; onPracti
         </div>
       )}
 
-      {tones !== 'ignore' && (
-        <div className="tones-practice">
-          <h3>Tones to practice</h3>
-          {trouble.length ? (
-            <>
-              <ul className="tone-list">
-                {trouble.slice(0, 20).map((w) => (
-                  <li key={w.id}>
-                    <span className="hanzi" lang="zh-CN">
-                      {w.hanzi}
-                    </span>{' '}
-                    <span className="pinyin">{w.pinyin}</span> <span className="muted small">× {w.toneErrors}</span>
-                  </li>
-                ))}
-              </ul>
-              <button className="btn block" onClick={() => onPracticeTones(trouble.slice(0, 20))}>
-                Practice pinyin for these ({Math.min(20, trouble.length)})
-              </button>
-            </>
-          ) : (
-            <p className="muted small">No tone errors yet.</p>
-          )}
-        </div>
-      )}
     </div>
   );
 }

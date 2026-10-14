@@ -73,7 +73,7 @@ export function SessionOptions({
           )}
           {mode === 'typing' && (
             <p className="hint">
-              EN → 中: type the Chinese characters (use a Chinese keyboard). 中 → EN and 中 → 拼音: pick the meaning, then type the pinyin (tone marks or numbers like ni3 hao3; how tones count follows the Tones setting).
+              EN → 中: type the Chinese characters (use a Chinese keyboard). 中 → EN and 中 → 拼音 stay multiple choice: pinyin and meanings are never typed.
             </p>
           )}
           <Segmented

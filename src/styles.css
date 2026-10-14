@@ -3268,3 +3268,27 @@ body.in-session .view-switch {
   color: var(--easy);
   text-decoration: underline dotted;
 }
+
+/* "…" placeholder in an entry (对…说) */
+.placeholder-chip {
+  display: inline-block;
+  margin: 0 0.12em;
+  padding: 0 0.3em;
+  border-radius: 0.3em;
+  background: var(--border);
+  color: var(--muted);
+  font-size: 0.7em;
+  line-height: 1.4;
+  vertical-align: middle;
+}
+
+/* "needs translation" label that opens Fill missing translations */
+.needs-btn {
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.75rem;
+}
+.word-row .example .example-translation {
+  color: var(--muted);
+}

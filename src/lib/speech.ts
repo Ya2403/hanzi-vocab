@@ -34,7 +34,8 @@ const live = new Set<SpeechSynthesisUtterance>();
 let pendingTimer: ReturnType<typeof setTimeout> | null = null;
 
 function utterance(text: string, rate: number | undefined, voice: SpeechSynthesisVoice | null): SpeechSynthesisUtterance {
-  const u = new SpeechSynthesisUtterance(text);
+  // A "…" placeholder (对…说) is read as a short pause.
+  const u = new SpeechSynthesisUtterance(text.split('…').join('，'));
   u.lang = 'zh-CN';
   if (voice) u.voice = voice;
   const r = rate ?? getSettings().speechRate;

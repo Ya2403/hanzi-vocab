@@ -10,6 +10,7 @@ import { Icon } from './Icon';
 import { Modal } from './Modal';
 import { SpeakButton } from './SpeakButton';
 import { LeechBadge, NotesBox, WordExamples } from './WordExtras';
+import { HanziText } from './HanziText';
 
 export function WordDetail({ word: initial, onClose, onEdit }: { word: Word; onClose(): void; onEdit(w: Word): void }) {
   const { words, deleteWord } = useStore();
@@ -51,7 +52,7 @@ export function WordDetail({ word: initial, onClose, onEdit }: { word: Word; onC
             onClick={pinyinShown ? undefined : () => setRevealedId(word.id)}
             title={pinyinShown ? undefined : 'Tap to show pinyin'}
           >
-            {word.hanzi}
+            <HanziText text={word.hanzi} />
           </span>
           <SpeakButton text={word.hanzi} size={24} />
         </div>

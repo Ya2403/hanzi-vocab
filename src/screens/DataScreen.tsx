@@ -12,8 +12,6 @@ import { Segmented } from '../components/Segmented';
 import { BulkAdd } from '../components/BulkAdd';
 import { SyncCard } from '../components/SyncCard';
 import { ReadableStats, SkillStats } from '../components/SkillStats';
-import { Session } from '../components/Session';
-import type { Word } from '../lib/types';
 import { TatoebaBulk } from '../components/Sentences';
 import { corpusCached, loadCorpus } from '../lib/tatoeba';
 
@@ -26,7 +24,6 @@ export function DataScreen() {
   const [voiceOk, setVoiceOk] = useState(hasChineseVoice);
   const [bulk, setBulk] = useState(false);
   const [tatoebaBulk, setTatoebaBulk] = useState(false);
-  const [tonePractice, setTonePractice] = useState<Word[] | null>(null);
   const withoutExample = words.filter((w) => !links.byWord.get(w.id)?.length).length;
 
   useEffect(() => onVoicesChanged(() => setVoiceOk(hasChineseVoice())), []);
@@ -60,19 +57,6 @@ export function DataScreen() {
     }
   };
 
-  if (tonePractice) {
-    return (
-      <Session
-        title="Tones"
-        words={tonePractice}
-        mode={settings.autoExercise ? 'auto' : 'typing'}
-        direction="zh-py"
-        skill="pinyin"
-        onExit={() => setTonePractice(null)}
-      />
-    );
-  }
-
   return (
     <section className="screen data-screen">
       <div className="card">
@@ -86,7 +70,7 @@ export function DataScreen() {
         </div>
       </div>
 
-      <SkillStats words={words} onPracticeTones={setTonePractice} />
+      <SkillStats words={words} />
 
       <ReadableStats />
 
@@ -321,21 +305,18 @@ function SettingsCard({ leechCount }: { leechCount: number }) {
       </label>
 
       <Segmented
-        label="Tones"
-        value={tones}
+        label="Tone marks on pinyin options"
+        value={tones === 'ignore' ? 'ignore' : 'show'}
         onChange={(v) => updateSettings({ tones: v })}
         options={[
-          { value: 'ignore', label: 'Ignore' },
-          { value: 'show', label: 'Show only' },
-          { value: 'required', label: 'Required' },
+          { value: 'ignore', label: 'Hide' },
+          { value: 'show', label: 'Show' },
         ]}
       />
       <p className="hint">
         {tones === 'ignore'
-          ? 'Pinyin options have no tone marks, and typed pinyin only has to be spelled right (ü can be typed as v or u).'
-          : tones === 'show'
-            ? 'Pinyin options show tone marks. Typed pinyin with wrong tones still counts, but is noted as a tone error.'
-            : 'Tones must be right: typed pinyin with wrong or missing tones counts as Close (Hard).'}{' '}
+          ? 'Pinyin options have no tone marks, so you pick by the sounds only.'
+          : 'Pinyin options show tone marks.'}{' '}
         Answers always show the tone marks.
       </p>
 

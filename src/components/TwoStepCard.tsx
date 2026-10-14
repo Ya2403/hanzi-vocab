@@ -1,6 +1,5 @@
 import { autoSpeak } from '../lib/quiet';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { checkPinyin, type Check } from '../lib/answer';
+import { useEffect, useRef, useState } from 'react';
 import { normalizeSearch } from '../lib/pinyin';
 import { pinyinDistractors, stripTones } from '../lib/pinyinOptions';
 import { useSettings } from '../lib/settings';
@@ -10,13 +9,12 @@ import type { Word } from '../lib/types';
 import { Icon } from './Icon';
 import { SpeakButton } from './SpeakButton';
 import { NotesBox, WordExamples } from './WordExtras';
-
-export type StepExercise = 'choice' | 'typing';
+import { HanziText } from './HanziText';
 
 export interface TwoStepResult {
   meaning: number;
   pinyin: number;
-  /** Typed pinyin had the right syllables but wrong tones. */
+  /** Always false: pinyin is picked from options, never typed. */
   toneError: boolean;
 }
 
@@ -24,7 +22,6 @@ interface Props {
   word: Word;
   /** Pool for the meaning distractors and similar-sounding pinyin. */
   pool: Word[];
-  pinyinEx: StepExercise;
   onDone(result: TwoStepResult): void;
 }
 
@@ -34,7 +31,6 @@ interface Option {
 }
 
 const OPTIONS = 4;
-const gradeOf: Record<Check['verdict'], number> = { correct: Grade.Good, close: Grade.Hard, wrong: Grade.Again };
 
 function meaningOptions(word: Word, pool: Word[]): Option[] {
   const seen = new Set([normalizeSearch(word.meaning)]);
@@ -58,25 +54,20 @@ function pinyinOptions(word: Word, pool: Word[], toneless: boolean): Option[] {
   ]);
 }
 
-/** One answered step: which option was picked (choice) or what was typed. */
+/** One answered step: which option was picked. */
 interface StepState {
   picked?: number;
-  typed?: string;
-  check?: Check;
-  /** "I was right" on a typed answer. */
-  override?: boolean;
 }
 
-const quality = (ex: StepExercise, options: Option[], s: StepState): number =>
-  s.override ? Grade.Good : ex === 'choice' ? (options[s.picked!]?.correct ? Grade.Good : Grade.Again) : gradeOf[s.check!.verdict];
+const quality = (options: Option[], s: StepState): number => (options[s.picked!]?.correct ? Grade.Good : Grade.Again);
 
 /**
  * Meaning, then pinyin, for the same characters:
  * 1. the hanzi alone (no pinyin, no audio) → what does it mean? (multiple choice)
- * 2. same hanzi → how is it pronounced?
+ * 2. same hanzi → how is it pronounced? (multiple choice)
  * 3. the full answer (hanzi, toned pinyin, meaning, example) with audio → Continue.
  */
-export function TwoStepCard({ word, pool, pinyinEx, onDone }: Props) {
+export function TwoStepCard({ word, pool, onDone }: Props) {
   const { tones } = useSettings();
   const [mOptions] = useState(() => meaningOptions(word, pool));
   const [pOptions] = useState(() => pinyinOptions(word, pool, tones === 'ignore'));
@@ -85,10 +76,10 @@ export function TwoStepCard({ word, pool, pinyinEx, onDone }: Props) {
   const [p, setP] = useState<StepState>({});
   const advanced = useRef(false);
 
-  const mAnswered = m.picked !== undefined || !!m.check;
-  const pAnswered = p.picked !== undefined || !!p.check;
-  const mq = mAnswered ? quality('choice', mOptions, m) : null;
-  const pq = pAnswered ? quality(pinyinEx, pOptions, p) : null;
+  const mAnswered = m.picked !== undefined;
+  const pAnswered = p.picked !== undefined;
+  const mq = mAnswered ? quality(mOptions, m) : null;
+  const pq = pAnswered ? quality(pOptions, p) : null;
 
   const toPinyin = () => {
     if (stage !== 'meaning' || advanced.current) return;
@@ -99,8 +90,7 @@ export function TwoStepCard({ word, pool, pinyinEx, onDone }: Props) {
     setStage('done');
     autoSpeak(word.hanzi);
   };
-  const finish = () =>
-    onDone({ meaning: mq ?? Grade.Again, pinyin: pq ?? Grade.Again, toneError: !!p.check?.toneError && !p.override && tones !== 'ignore' });
+  const finish = () => onDone({ meaning: mq ?? Grade.Again, pinyin: pq ?? Grade.Again, toneError: false });
 
   // A right multiple-choice meaning moves on by itself; a wrong one waits so the answer can be read.
   useEffect(() => {
@@ -115,7 +105,7 @@ export function TwoStepCard({ word, pool, pinyinEx, onDone }: Props) {
       if (e.target instanceof HTMLInputElement || e.repeat || document.querySelector('.modal-backdrop')) return;
       const n = Number(e.key) - 1;
       if (stage === 'meaning' && !mAnswered && mOptions[n]) setM({ picked: n });
-      else if (stage === 'pinyin' && pinyinEx === 'choice' && !pAnswered && pOptions[n]) {
+      else if (stage === 'pinyin' && !pAnswered && pOptions[n]) {
         setP({ picked: n });
         reveal();
       } else if (e.key === 'Enter' || e.key === ' ') {
@@ -163,7 +153,7 @@ export function TwoStepCard({ word, pool, pinyinEx, onDone }: Props) {
           {stage === 'meaning' ? 'What does it mean? (1/2)' : stage === 'pinyin' ? 'How is it pronounced? (2/2)' : 'Answer'}
         </div>
         <div className="prompt-hanzi" lang="zh-CN">
-          {word.hanzi}
+          <HanziText text={word.hanzi} />
         </div>
         {stage !== 'meaning' && <div className="answer-meaning">{word.meaning}</div>}
         {stage === 'done' && (
@@ -195,38 +185,23 @@ export function TwoStepCard({ word, pool, pinyinEx, onDone }: Props) {
       )}
 
       {stage === 'pinyin' &&
-        (pinyinEx === 'choice' ? (
-          choiceList(
-            pOptions,
-            p,
-            (i) => {
-              setP({ picked: i });
-              reveal();
-            },
-            true,
-          )
-        ) : (
-          <TypedStep
-            key="p"
-            placeholder={tones === 'ignore' ? 'ni hao' : 'ni3 hao3 / nǐ hǎo'}
-            state={p}
-            check={(t) => checkPinyin(t, word.pinyin, tones)}
-            rejectHanzi
-            answerText={word.pinyin}
-            onChange={setP}
-            onNext={reveal}
-            nextLabel="Show answer"
-          />
-        ))}
+        choiceList(
+          pOptions,
+          p,
+          (i) => {
+            setP({ picked: i });
+            reveal();
+          },
+          true,
+        )}
 
       {stage === 'done' && (
         <>
-          {pinyinEx === 'choice' && choiceList(pOptions, p, () => {}, true)}
+          {choiceList(pOptions, p, () => {}, true)}
           <div className={`feedback ${(mq ?? 0) >= 3 && (pq ?? 0) >= 3 ? 'ok' : 'bad'}`}>
             <span className="step-results">
               {resultLine('Meaning', mq)}
               {resultLine('Pinyin', pq)}
-              {p.check?.toneError && tones !== 'ignore' && !p.override && <span className="muted small"> · wrong tone</span>}
             </span>
             <button className="btn primary" onClick={finish} autoFocus>
               Continue
@@ -235,97 +210,5 @@ export function TwoStepCard({ word, pool, pinyinEx, onDone }: Props) {
         </>
       )}
     </div>
-  );
-}
-
-/** A typed answer inside the two-step card, with "Don't know" and "I was right". */
-function TypedStep({
-  placeholder,
-  state,
-  check,
-  rejectHanzi = false,
-  answerText,
-  onChange,
-  onNext,
-  nextLabel,
-}: {
-  placeholder: string;
-  state: StepState;
-  check(text: string): Check;
-  rejectHanzi?: boolean;
-  answerText: string;
-  onChange(s: StepState): void;
-  onNext(): void;
-  nextLabel: string;
-}) {
-  const [input, setInput] = useState('');
-  const [hint, setHint] = useState<string | null>(null);
-  const ref = useRef<HTMLInputElement>(null);
-  const result = state.check;
-
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    if (result) return onNext();
-    if (!input.trim()) return;
-    if (rejectHanzi && /[㐀-鿿]/.test(input)) return setHint('Type the pinyin, e.g. ni hao.');
-    onChange({ typed: input, check: check(input) });
-    ref.current?.focus();
-  };
-
-  return (
-    <form className="typing-form" onSubmit={submit}>
-      <input
-        ref={ref}
-        className={`input typing-input ${result ? `is-${state.override ? 'correct' : result.verdict}` : ''}`}
-        value={input}
-        onChange={(e) => {
-          setInput(e.target.value);
-          setHint(null);
-        }}
-        readOnly={!!result}
-        placeholder={placeholder}
-        autoFocus
-        autoComplete="off"
-        autoCorrect="off"
-        autoCapitalize="off"
-        spellCheck={false}
-        enterKeyHint={result ? 'next' : 'done'}
-        aria-label="Your answer"
-      />
-      {hint && !result && <p className="hint warn">{hint}</p>}
-      {!result ? (
-        <div className="row typing-buttons">
-          <button type="button" className="btn ghost" onClick={() => onChange({ typed: '', check: { verdict: 'wrong' } })}>
-            Don’t know
-          </button>
-          <button type="submit" className="btn primary" disabled={!input.trim()}>
-            Check
-          </button>
-        </div>
-      ) : (
-        <div className={`feedback ${state.override || result.verdict === 'correct' ? 'ok' : result.verdict === 'close' ? 'meh' : 'bad'}`}>
-          <span>
-            <b>{state.override || result.verdict === 'correct' ? 'Correct!' : result.verdict === 'close' ? 'Close' : 'Answer'}</b>
-            {result.note && !state.override && ` · ${result.note}`}
-            {result.verdict !== 'correct' && !state.override && (
-              <>
-                {' '}
-                · <b>{answerText}</b>
-              </>
-            )}
-          </span>
-          <div className="row">
-            {result.verdict !== 'correct' && input.trim() && !state.override && (
-              <button type="button" className="btn ghost" onClick={() => onChange({ ...state, override: true })}>
-                I was right
-              </button>
-            )}
-            <button type="submit" className="btn primary">
-              {nextLabel}
-            </button>
-          </div>
-        </div>
-      )}
-    </form>
   );
 }
