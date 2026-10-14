@@ -20,6 +20,7 @@ export function cleanSentenceInput(input: SentenceInput): SentenceInput {
     notes: notes || undefined,
     wordIds: input.wordIds?.length ? [...new Set(input.wordIds)] : undefined,
     tatoebaId: input.tatoebaId,
+    alternatives: input.alternatives?.map((a) => a.trim()).filter(Boolean).length ? input.alternatives.map((a) => a.trim()).filter(Boolean) : undefined,
   };
 }
 

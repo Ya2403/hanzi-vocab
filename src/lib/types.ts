@@ -117,6 +117,8 @@ export interface Sentence {
   wordIds?: string[];
   /** Tatoeba sentence id, for attribution. */
   tatoebaId?: number;
+  /** Other correct ways to say it (accepted when building or typing the sentence). */
+  alternatives?: string[];
   /** Review schedules, set once the sentence is learned in Learn (none = new). */
   skills?: SentenceSkills;
   /** Local date the sentence was learned. */
@@ -129,7 +131,7 @@ export interface Sentence {
 export type SentenceSkill = 'understand' | 'produce';
 export type SentenceSkills = Partial<Record<SentenceSkill, SkillState>>;
 
-export type SentenceInput = Pick<Sentence, 'zh' | 'pinyin' | 'translation' | 'tags' | 'notes' | 'wordIds' | 'tatoebaId'>;
+export type SentenceInput = Pick<Sentence, 'zh' | 'pinyin' | 'translation' | 'tags' | 'notes' | 'wordIds' | 'tatoebaId' | 'alternatives'>;
 
 export interface DialogueLine {
   sentenceId: string;

@@ -1,9 +1,12 @@
 /**
- * Reviewing words in context: picking a sentence that contains the word (i+1 first), the
- * exercise for it (fill the blank, reply in the dialogue, read and check), and checking typed
- * Chinese. Pure functions (randomness passed in), unit-tested.
+ * Reviewing items in context: picking a sentence that contains the item (i+1 first), the
+ * exercise for it (fill the blank, reply in the dialogue, complete the chat, build in Chinese,
+ * complete the sentence), and checking typed Chinese. Pure functions (randomness passed in),
+ * unit-tested.
  */
-import { skillStrength, type Card, type Step } from './planner';
+import { skillStrength, wordPriority, type Card, type Step } from './planner';
+import { isWordEntry, needsWork, wordAccuracy } from './entries';
+import { BLANKS, chooseBlanks } from './tiles';
 import type { Links } from './sentences';
 import { isLearned, skillState } from './srs';
 import { CHAT_MIN_LINES } from './choiceExercises';
@@ -12,12 +15,13 @@ import type { Dialogue, Sentence, Skill, Word } from './types';
 /** "Use sentences in reviews": never, about 40% of the eligible reviews, or whenever possible. */
 export type UseSentences = 'off' | 'some' | 'max';
 export const SOME_SHARE = 0.4;
-/** At most this many other session words are graded on one read-and-check card. */
-export const MAX_ALSO = 2;
-
-/** cloze: fill the blank; reply: reply in the dialogue; read: read and check; chat: Complete the chat (pick the reply). */
-export type ContextExercise = 'cloze' | 'reply' | 'read' | 'chat';
-export type ContextPart = 'choice' | 'typing' | 'tiles' | 'check';
+/**
+ * cloze: fill the blank; reply: reply in the dialogue; chat: Complete the chat (pick the reply);
+ * build: Build in Chinese (the sentence from word tiles); complete: Complete the sentence (blanks
+ * filled from tiles).
+ */
+export type ContextExercise = 'cloze' | 'reply' | 'chat' | 'build' | 'complete';
+export type ContextPart = 'choice' | 'typing' | 'tiles';
 
 export interface ContextCard {
   kind: 'context';
@@ -25,9 +29,13 @@ export interface ContextCard {
   part: ContextPart;
   skill: Skill;
   sentenceId: string;
-  /** Read and check: other words of the session highlighted (and graded) in the same sentence. */
-  alsoIds?: string[];
+  /** Complete the sentence: the other items blanked besides the target (they record accuracy). */
+  blankIds?: string[];
 }
+
+/** How much an item needs practice (for picking extra blanks): characters by FSRS priority, words by "needs work" and accuracy. */
+export const itemPriority = (w: Word): number =>
+  isWordEntry(w) ? (needsWork(w) ? 5 : 0) + (1 - (wordAccuracy(w) ?? 1)) * 3 : (wordPriority(w)?.priority ?? 0);
 
 export const isContextCard = (c: Card | ContextCard): c is ContextCard => c.kind === 'context';
 
@@ -153,18 +161,15 @@ export function contextSentences(w: Word, world: ContextWorld): Sentence[] {
 }
 
 /**
- * Turn a word card into a sentence exercise, by the tested skill's strength:
- * - weak → fill the blank with options;
- * - medium → read and check (meaning), reply with tiles (recall, dialogue lines);
- * - strong → fill the blank typed, reply typed.
+ * Turn a card into a sentence exercise, by the tested skill's strength:
+ * - weak: fill the blank with options; recall also Complete the sentence with 1 blank;
+ * - medium: meaning → Complete the chat (dialogue replies) or fill the blank; recall → reply with
+ *   tiles (dialogue lines), Build in Chinese, or Complete the sentence with 2 blanks;
+ * - strong: reply typed (dialogue lines), fill the blank typed, or (recall) Complete the sentence
+ *   with 3 blanks.
  * Pinyin stays a word card. Returns null when there's no suitable sentence (or it isn't picked).
  */
-export function contextCardFor(
-  w: Word,
-  skill: Skill,
-  world: ContextWorld,
-  opts: { use: UseSentences; rnd?: () => number; on?: string; sessionWords?: Word[] },
-): ContextCard | null {
+export function contextCardFor(w: Word, skill: Skill, world: ContextWorld, opts: { use: UseSentences; rnd?: () => number; on?: string }): ContextCard | null {
   const rnd = opts.rnd ?? Math.random;
   if (opts.use === 'off' || skill === 'pinyin' || skill === 'writing') return null;
   const sentences = contextSentences(w, world);
@@ -175,52 +180,41 @@ export function contextCardFor(
   // Complete the chat: a reply line of a dialogue with at least 3 lines.
   const chats = replies.filter((s) => (world.lineOf(s.id)?.lines.length ?? 0) >= CHAT_MIN_LINES);
   const pick = <T,>(xs: T[]) => xs[Math.min(xs.length - 1, Math.floor(rnd() * Math.min(xs.length, 3)))];
+  const card = (ex: ContextExercise, part: ContextPart, list: Sentence[] = sentences): ContextCard => ({ kind: 'context', ex, part, skill, sentenceId: pick(list).id });
+  /** Complete the sentence with the target plus the highest-priority other items. */
+  const complete = (): ContextCard | null => {
+    const s = pick(sentences);
+    const blanks = chooseBlanks(s, w, world.links.bySentence.get(s.id) ?? [], BLANKS[st], itemPriority);
+    if (!blanks) return null;
+    const others = blanks.filter((x) => x.item.id !== w.id).map((x) => x.item.id);
+    return { kind: 'context', ex: 'complete', part: 'tiles', skill, sentenceId: s.id, blankIds: others.length ? others : undefined };
+  };
+  const oneOf = (list: (ContextCard | null)[]): ContextCard | null => {
+    const ok = list.filter((x): x is ContextCard => !!x);
+    return ok.length ? ok[Math.floor(rnd() * ok.length)] : null;
+  };
 
-  if (st === 'weak') return { kind: 'context', ex: 'cloze', part: 'choice', skill, sentenceId: pick(sentences).id };
-  if (st === 'medium') {
-    if (skill === 'recall' && replies.length) return { kind: 'context', ex: 'reply', part: 'tiles', skill, sentenceId: pick(replies).id };
-    if (skill === 'meaning' && chats.length && rnd() < 0.5) return { kind: 'context', ex: 'chat', part: 'choice', skill, sentenceId: pick(chats).id };
-    if (skill === 'meaning') {
-      const s = pick(sentences);
-      // Other session words in the same sentence are highlighted and graded too (a few at most).
-      const linked = new Set((world.links.bySentence.get(s.id) ?? []).map((x) => x.id));
-      const also = (opts.sessionWords ?? [])
-        .filter((x) => x.id !== w.id && linked.has(x.id) && isLearned(x) && s.zh.includes(x.hanzi.trim()))
-        .map((x) => x.id)
-        .slice(0, MAX_ALSO);
-      return { kind: 'context', ex: 'read', part: 'check', skill, sentenceId: s.id, alsoIds: also.length ? also : undefined };
-    }
-    return { kind: 'context', ex: 'cloze', part: 'choice', skill, sentenceId: pick(sentences).id };
+  if (st === 'weak') {
+    if (skill === 'recall') return oneOf([card('cloze', 'choice'), complete()]);
+    return card('cloze', 'choice');
   }
-  if (skill === 'recall' && replies.length) return { kind: 'context', ex: 'reply', part: 'typing', skill, sentenceId: pick(replies).id };
-  return { kind: 'context', ex: 'cloze', part: 'typing', skill, sentenceId: pick(sentences).id };
+  if (st === 'medium') {
+    if (skill === 'meaning') return chats.length && rnd() < 0.5 ? card('chat', 'choice', chats) : card('cloze', 'choice');
+    return oneOf([replies.length ? card('reply', 'tiles', replies) : null, card('build', 'tiles'), complete()]);
+  }
+  if (skill === 'recall') return oneOf([replies.length ? card('reply', 'typing', replies) : null, card('cloze', 'typing'), complete()]);
+  return card('cloze', 'typing');
 }
 
-/**
- * Session steps with some word cards turned into sentence exercises. A read-and-check card can
- * also cover later words of the session that appear in its sentence and are due a meaning
- * review; those don't get their own card.
- */
+/** Session steps with some cards turned into sentence exercises. */
 export function withContext(steps: Step[], words: Map<string, Word>, world: ContextWorld, opts: { use: UseSentences; rnd?: () => number; on?: string }): (Step | ContextStep)[] {
-  const covered = new Set<string>();
-  const out: (Step | ContextStep)[] = [];
   const skillOf = (c: Card): Skill | null => (c.kind === 'single' ? c.skill : c.kind === 'pair' ? 'meaning' : null);
-  steps.forEach((s, i) => {
-    if (covered.has(s.id)) return;
+  return steps.map((s) => {
     const w = words.get(s.id);
     const skill = skillOf(s.card);
-    const later = steps
-      .slice(i + 1)
-      .filter((x) => skillOf(x.card) === 'meaning')
-      .map((x) => words.get(x.id))
-      .filter((x): x is Word => !!x && !covered.has(x.id));
-    const ctx = w && skill ? contextCardFor(w, skill, world, { ...opts, sessionWords: later }) : null;
-    if (ctx) {
-      ctx.alsoIds?.forEach((id) => covered.add(id));
-      out.push({ id: s.id, card: ctx, scheduled: [ctx.skill], target: s.target });
-    } else out.push(s);
+    const ctx = w && skill ? contextCardFor(w, skill, world, opts) : null;
+    return ctx ? { id: s.id, card: ctx, scheduled: [ctx.skill], target: s.target } : s;
   });
-  return out;
 }
 
 export interface ContextStep {

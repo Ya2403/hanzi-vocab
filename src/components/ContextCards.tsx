@@ -8,6 +8,9 @@ import { usePinyinVisibility } from '../lib/settings';
 import { Grade, isLearned } from '../lib/srs';
 import type { Sentence, Word } from '../lib/types';
 import { ClozeChoice, SentenceReveal, TappableSentence } from './SentenceExercises';
+import { BuildChinese, CompleteSentence } from './TileCards';
+import { blankTiles, sentenceBuildTiles, type Blank } from '../lib/tiles';
+import { hanziDictNow } from '../lib/hanziDict';
 import { SpeakButton } from './SpeakButton';
 
 /** What a sentence card graded: the target word, words also highlighted, other words of a reply (right or wrong). */
@@ -355,85 +358,7 @@ function TypedReply({ expected, onDone }: { expected: string; onDone(got: string
   );
 }
 
-/** Read and check: highlighted words; "I understand" (then confirm) or "Show translation" (a miss). */
-function ReadCheck({ s, targets, onAnswer }: { s: Sentence; targets: Word[]; onAnswer(q: number): void }) {
-  const pv = usePinyinVisibility();
-  const [state, setState] = useState<'ask' | 'understood' | 'shown'>('ask');
-  const [wrong, setWrong] = useState(false);
-  const parts = useMemo(() => {
-    // Split the sentence around the highlighted words.
-    const marks: { at: number; len: number }[] = [];
-    for (const w of targets) {
-      const at = s.zh.indexOf(w.hanzi);
-      if (at >= 0) marks.push({ at, len: w.hanzi.length });
-    }
-    marks.sort((a, b) => a.at - b.at);
-    const out: { t: string; mark: boolean }[] = [];
-    let i = 0;
-    for (const m of marks) {
-      if (m.at < i) continue;
-      if (m.at > i) out.push({ t: s.zh.slice(i, m.at), mark: false });
-      out.push({ t: s.zh.slice(m.at, m.at + m.len), mark: true });
-      i = m.at + m.len;
-    }
-    if (i < s.zh.length) out.push({ t: s.zh.slice(i), mark: false });
-    return out;
-  }, [s, targets]);
-  const next = () => onAnswer(state === 'understood' && !wrong ? Grade.Good : Grade.Again);
-  useEnter(state === 'ask' ? null : next);
-
-  return (
-    <div className="practice sentence-practice">
-      <div className="card prompt-card">
-        <div className="card-kicker">Read it: do you understand the highlighted word{targets.length > 1 ? 's' : ''}?</div>
-        <div className="prompt-sentence" lang="zh-CN">
-          {parts.map((p, i) => (p.mark ? <mark key={i} className="target">{p.t}</mark> : <span key={i}>{p.t}</span>))}
-        </div>
-        {pv.question && state === 'ask' && <div className="pinyin small">{s.pinyin}</div>}
-        {state !== 'ask' && <SentenceReveal sentence={s} />}
-      </div>
-      {state === 'ask' ? (
-        <div className="row center read-check-buttons">
-          <button
-            className="btn"
-            onClick={() => {
-              setState('shown');
-              autoSpeak(s.zh);
-            }}
-          >
-            Show translation
-          </button>
-          <button
-            className="btn primary"
-            autoFocus
-            onClick={() => {
-              setState('understood');
-              autoSpeak(s.zh);
-            }}
-          >
-            I understand
-          </button>
-        </div>
-      ) : (
-        <div className={`feedback ${state === 'understood' && !wrong ? 'ok' : 'bad'}`}>
-          <span>{state === 'shown' ? `Counted as a miss for the highlighted word${targets.length > 1 ? 's' : ''}.` : wrong ? 'Counted as a miss.' : 'Check the translation above.'}</span>
-          <div className="row">
-            {state === 'understood' && !wrong && (
-              <button className="btn ghost" onClick={() => setWrong(true)}>
-                Actually I was wrong
-              </button>
-            )}
-            <button className="btn primary" onClick={next} autoFocus>
-              Continue
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** A word review in a sentence (fill the blank, reply in the dialogue, read and check). */
+/** An item reviewed in a sentence (fill the blank, reply in the dialogue, build in Chinese, complete the sentence). */
 export function ContextCardView({
   card,
   word,
@@ -479,12 +404,59 @@ export function ContextCardView({
       />
     );
   }
-  const also = (card.alsoIds ?? []).map((id) => words.find((w) => w.id === id)).filter((w): w is Word => !!w);
+  if (card.ex === 'complete') return <CompleteCard s={s} word={word} blankIds={card.blankIds ?? []} onAnswer={onAnswer} />;
+  return <BuildCard s={s} word={word} linked={linked} onAnswer={onAnswer} />;
+}
+
+/**
+ * Build in Chinese for a sentence: its English, then its word tiles. The target is right when its
+ * own characters are; the other learned items of the sentence record right or wrong.
+ */
+function BuildCard({ s, word, linked, onAnswer }: { s: Sentence; word: Word; linked: Word[]; onAnswer(r: ContextResult): void }) {
+  const { words } = useStore();
+  const [set] = useState(() => sentenceBuildTiles(s, words, hanziDictNow()));
+  const items = [word, ...linked.filter((w) => w.id !== word.id && isLearned(w))];
   return (
-    <ReadCheck
+    <BuildChinese
+      kicker="Build it in Chinese"
+      prompt={<div className="prompt-meaning">{s.translation}</div>}
+      answer={set.answer}
+      tiles={set.tiles}
+      alternatives={s.alternatives}
+      speakText={s.zh}
+      reveal={<SentenceReveal sentence={s} />}
+      onDone={(result, placed) => {
+        const res = result.ok ? new Map(items.map((w) => [w.id, true])) : wordResults(s.zh, placed.join(''), items);
+        const targetOk = result.ok || res.get(word.id) === true;
+        res.delete(word.id);
+        onAnswer({ q: targetOk ? Grade.Good : Grade.Again, others: res });
+      }}
+    />
+  );
+}
+
+/** Complete the sentence: the target and the other blanked items, each graded on its own. */
+function CompleteCard({ s, word, blankIds, onAnswer }: { s: Sentence; word: Word; blankIds: string[]; onAnswer(r: ContextResult): void }) {
+  const { words } = useStore();
+  const [setup] = useState(() => {
+    const items = [word, ...blankIds.map((id) => words.find((w) => w.id === id)).filter((w): w is Word => !!w)];
+    const blanks: Blank[] = items
+      .map((item) => ({ item, at: s.zh.indexOf(item.hanzi.trim()) }))
+      .filter((b) => b.at >= 0)
+      .sort((x, y) => x.at - y.at);
+    return { blanks, tiles: blankTiles(blanks, s, words) };
+  });
+  return (
+    <CompleteSentence
       s={s}
-      targets={[word, ...also]}
-      onAnswer={(q) => onAnswer({ q, also: new Map(also.map((w) => [w.id, q])) })}
+      blanks={setup.blanks}
+      tiles={setup.tiles}
+      onDone={(results) => {
+        const res = new Map(setup.blanks.map((b, k) => [b.item.id, results[k]]));
+        const targetOk = res.get(word.id) === true;
+        res.delete(word.id);
+        onAnswer({ q: targetOk ? Grade.Good : Grade.Again, others: res });
+      }}
     />
   );
 }

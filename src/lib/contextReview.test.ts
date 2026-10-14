@@ -64,9 +64,15 @@ describe('choosing a sentence and an exercise', () => {
     expect(contextCardFor(strong, 'recall', world, { use: 'max', rnd: () => 0, on: ON })).toMatchObject({ ex: 'reply', part: 'typing', sentenceId: '你叫什么名字？' });
   });
 
-  it('medium meaning → read and check, covering other session words in the sentence', () => {
-    const card = contextCardFor(byHanzi('我'), 'meaning', world, { use: 'max', rnd: () => 0, on: ON, sessionWords: [byHanzi('是'), byHanzi('你')] });
-    expect(card).toMatchObject({ ex: 'read', part: 'check', sentenceId: '我是老师。', alsoIds: ['是'] });
+  it('medium meaning → fill the blank (or Complete the chat in a dialogue); medium recall → reply tiles, build, or complete the sentence', () => {
+    expect(contextCardFor(byHanzi('我'), 'meaning', world, { use: 'max', rnd: () => 0.9, on: ON })).toMatchObject({ ex: 'cloze', part: 'choice', sentenceId: '我是老师。' });
+    expect(contextCardFor(byHanzi('名字'), 'meaning', world, { use: 'max', rnd: () => 0, on: ON })).toMatchObject({ ex: 'chat', sentenceId: '你叫什么名字？' });
+    expect(contextCardFor(byHanzi('名字'), 'recall', world, { use: 'max', rnd: () => 0, on: ON })).toMatchObject({ ex: 'reply', part: 'tiles' });
+    expect(contextCardFor(byHanzi('名字'), 'recall', world, { use: 'max', rnd: () => 0.5, on: ON })).toMatchObject({ ex: 'build', part: 'tiles' });
+    // Complete the sentence: medium = 2 blanks (the target + 1 other learned item).
+    const complete = contextCardFor(byHanzi('名字'), 'recall', world, { use: 'max', rnd: () => 0.99, on: ON })!;
+    expect(complete).toMatchObject({ ex: 'complete', part: 'tiles', sentenceId: '你叫什么名字？' });
+    expect(complete.blankIds).toHaveLength(1);
   });
 
   it('keeps pinyin as a word card, and honours "off"', () => {
@@ -74,21 +80,11 @@ describe('choosing a sentence and an exercise', () => {
     expect(contextCardFor(byHanzi('我'), 'meaning', world, { use: 'off', on: ON })).toBeNull();
   });
 
-  it('drops the cards of words already covered by a read-and-check', () => {
-    const steps: Step[] = ['我', '是', '你'].map((h) => ({ id: h, card: { kind: 'pair', p: 'choice' }, scheduled: ['meaning', 'pinyin'] }));
+  it('turns cards into sentence exercises one for one', () => {
+    const steps: Step[] = ['我', '是', '你'].map((h) => ({ id: h, card: { kind: 'pair', p: 'choice' }, scheduled: ['meaning', 'pinyin'], target: h === '是' ? 'x' : undefined }));
     const out = withContext(steps, new Map(words.map((x) => [x.id, x])), world, { use: 'max', rnd: () => 0, on: ON });
-    expect(out.map((x) => x.id)).toEqual(['我', '你']);
-    expect(out[0].card).toMatchObject({ kind: 'context', ex: 'read', alsoIds: ['是'] });
-  });
-
-  it("doesn't cover a word whose planned review is recall", () => {
-    const steps: Step[] = [
-      { id: '我', card: { kind: 'pair', p: 'choice' }, scheduled: ['meaning', 'pinyin'] },
-      { id: '是', card: { kind: 'single', ex: 'choice', skill: 'recall', dir: 'en-zh' }, scheduled: ['recall'] },
-    ];
-    const out = withContext(steps, new Map(words.map((x) => [x.id, x])), world, { use: 'max', rnd: () => 0, on: ON });
-    expect(out.map((x) => x.id)).toEqual(['我', '是']);
-    expect(out[0].card).toMatchObject({ ex: 'read' });
-    expect((out[0].card as { alsoIds?: string[] }).alsoIds).toBeUndefined();
+    expect(out.map((x) => x.id)).toEqual(['我', '是', '你']);
+    expect(out[0].card).toMatchObject({ kind: 'context', ex: 'cloze' });
+    expect(out[1].target).toBe('x');
   });
 });

@@ -3520,3 +3520,71 @@ body.in-session .view-switch {
 .chat-bubble.bad {
   background: var(--bad-soft);
 }
+
+/* ---------- Tile exercises ---------- */
+.tile .tile-pinyin {
+  font-size: 0.65rem;
+  color: var(--accent);
+}
+.tile.ghost-tile {
+  visibility: hidden;
+}
+.tile.static {
+  cursor: default;
+}
+.tile-answer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+}
+.tile.wrong-tile {
+  border-color: var(--bad);
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+.complete-line {
+  margin-top: 10px;
+  font-family: var(--font-zh);
+  font-size: 1.5rem;
+  line-height: 2.2;
+}
+.blank-tile {
+  display: inline-block;
+  min-width: 1.6em;
+  margin: 0 2px;
+  padding: 0 6px;
+  border: 0;
+  border-bottom: 3px solid var(--accent);
+  border-radius: 6px 6px 0 0;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  line-height: 1.4;
+  cursor: pointer;
+}
+.blank-tile.empty {
+  cursor: default;
+}
+.blank-tile:disabled {
+  opacity: 1;
+}
+.blank-tile.ok {
+  border-color: var(--good);
+  background: var(--good-soft);
+}
+.blank-tile.bad {
+  border-color: var(--bad);
+  background: var(--bad-soft);
+}
+.blank-tile s {
+  color: var(--bad);
+  margin-right: 4px;
+  font-size: 0.8em;
+}
+.word-reveal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}

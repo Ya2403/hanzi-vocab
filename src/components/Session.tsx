@@ -23,6 +23,7 @@ import { targetChar } from '../lib/wordPractice';
 import { ContextCardView, type ContextResult } from './ContextCards';
 import { HanziText } from './HanziText';
 import { ChatChoice, WhichChar } from './ChoiceCards';
+import { BuildWord } from './TileCards';
 import { loadHanziDict } from '../lib/hanziDict';
 
 export type { SessionMode } from '../lib/planner';
@@ -418,12 +419,12 @@ export function Session({ title, words: initialWords, mode, direction, skillFor,
     const pos = lineOf.get(current.card.sentenceId);
     const prevLine = pos && pos.index > 0 ? pos.lines[pos.index - 1] : undefined;
     const speakerOf = (id: string) => dialogues.flatMap((d) => d.lines).find((l) => l.sentenceId === id)?.speaker;
-    const ex = { cloze: 'fill the blank', reply: 'reply', read: 'read and check', chat: 'complete the chat' }[current.card.ex];
+    const ex = { cloze: 'fill the blank', reply: 'reply', chat: 'complete the chat', build: 'build in Chinese', complete: 'complete the sentence' }[current.card.ex];
     const dialogue = dialogues.find((d) => d.lines.some((l) => l.sentenceId === current.card.sentenceId));
     const contextCard = sentence && (
       <ContextCardView
         key={step}
-        card={current.card.ex === 'chat' ? { ...current.card, ex: 'read', part: 'check' } : current.card}
+        card={current.card.ex === 'chat' ? { ...current.card, ex: 'cloze', part: 'choice' } : current.card}
         word={word}
         sentence={sentence}
         prev={prevLine && pos ? { sentence: prevLine, speaker: speakerOf(prevLine.id), lines: pos.lines } : undefined}
@@ -462,10 +463,11 @@ export function Session({ title, words: initialWords, mode, direction, skillFor,
   else if (c.ex === 'typing') card = <Typing key={step} word={word} onAnswer={answerOne(c.skill)} />;
   else if (c.ex === 'whichChar')
     card = <WhichChar key={step} word={word} target={current.target ? wordOf(current.target)?.hanzi : undefined} onAnswer={answerOne(c.skill)} onSkip={skip} />;
+  else if (c.ex === 'build') card = <BuildWord key={step} word={word} onAnswer={answerOne(c.skill)} />;
   else if (c.ex === 'translate') card = <MultipleChoice key={step} word={word} allWords={choicePool} direction="en-zh" variant="translate" onAnswer={answerOne(c.skill)} />;
   else card = <MultipleChoice key={step} word={word} allWords={choicePool} direction={c.dir} onAnswer={answerOne(c.skill)} />;
 
-  const exLabel = c.kind === 'single' && c.ex === 'whichChar' ? ' · which character' : c.kind === 'single' && c.ex === 'translate' ? ' · translation' : '';
+  const exLabel = c.kind !== 'single' ? '' : ({ whichChar: ' · which character', translate: ' · translation', build: ' · build in Chinese' } as Record<string, string>)[c.ex] ?? '';
   const label = matchRound ? 'match pairs' : testedSkills(c).map((k) => SKILL_LABEL[k].toLowerCase()).join(' + ') + exLabel;
 
   return (

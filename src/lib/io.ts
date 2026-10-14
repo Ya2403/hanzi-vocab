@@ -82,11 +82,17 @@ export function normalizeSentence(raw: unknown, fallbackTime: number = Date.now(
     dialogueId: str(r.dialogueId) || undefined,
     wordIds: ids.length ? ids : undefined,
     tatoebaId: typeof r.tatoebaId === 'number' ? r.tatoebaId : undefined,
+    alternatives: alternativesOf(r.alternatives),
     ...sentenceSkills(r.skills, r.learnedOn),
     createdAt: num(r.createdAt, fallbackTime),
     updatedAt: num(r.updatedAt, fallbackTime),
   };
 }
+
+const alternativesOf = (v: unknown): string[] | undefined => {
+  const list = Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string').map((x) => x.trim()).filter(Boolean) : [];
+  return list.length ? list : undefined;
+};
 
 /** A sentence's skills (understand / produce) and learned date, if it has been learned. */
 function sentenceSkills(raw: unknown, learnedOn: unknown): Pick<Sentence, 'skills' | 'learnedOn'> {

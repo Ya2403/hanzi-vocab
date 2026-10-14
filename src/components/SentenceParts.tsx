@@ -117,6 +117,8 @@ export function SentenceForm({ sentence, onClose }: { sentence?: Sentence; onClo
   const [translation, setTranslation] = useState(sentence?.translation ?? '');
   const [tagText, setTagText] = useState(sentence?.tags.join(', ') ?? '');
   const [notes, setNotes] = useState(sentence?.notes ?? '');
+  // Other correct ways to say it, one per line.
+  const [altText, setAltText] = useState(sentence?.alternatives?.join('\n') ?? '');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const dialogue = sentence?.dialogueId ? dialogues.find((d) => d.id === sentence.dialogueId) : undefined;
@@ -132,7 +134,11 @@ export function SentenceForm({ sentence, onClose }: { sentence?: Sentence; onClo
     e.preventDefault();
     if (!zh.trim() || !translation.trim()) return setError('Chinese and translation are required.');
     setSaving(true);
-    const input = { zh, pinyin: pinyinAuto ? toPinyin(zh) : pinyin, translation, tags: parseTagText(tagText), notes };
+    const alternatives = altText
+      .split(/\r?\n/)
+      .map((a) => a.trim())
+      .filter(Boolean);
+    const input = { zh, pinyin: pinyinAuto ? toPinyin(zh) : pinyin, translation, tags: parseTagText(tagText), notes, alternatives };
     try {
       if (sentence) await updateSentences([{ ...sentence, ...input }]);
       else await addSentences([{ ...input, wordIds: undefined }]);
@@ -187,6 +193,13 @@ export function SentenceForm({ sentence, onClose }: { sentence?: Sentence; onClo
             Tags <span className="optional">comma-separated</span>
           </span>
           <input className="input" value={tagText} onChange={(e) => setTagText(e.target.value)} placeholder="lesson 1" />
+        </label>
+        <label className="field">
+          <span className="field-label">
+            Also correct <span className="optional">optional, one per line</span>
+          </span>
+          <textarea className="input" rows={2} value={altText} onChange={(e) => setAltText(e.target.value)} lang="zh-CN" placeholder="我在学中文字。" />
+          <span className="hint">Other ways to say it, accepted when you build or type this sentence.</span>
         </label>
         <label className="field">
           <span className="field-label">
