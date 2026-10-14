@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { HanziDict } from './hanziDict';
-import { isRadicalOnly, nextBatch, planLearning, wordsSimilar } from './learn';
+import { isRadicalOnly, nextBatch, planLearning, unlockRank, wordsSimilar } from './learn';
 import { isNew, learnedSkills } from './srs';
 import type { Word } from './types';
 
@@ -96,5 +96,21 @@ describe('isRadicalOnly', () => {
   it('recognizes bound radical forms, not normal characters', () => {
     expect(['氵', '扌', '讠', '⺍'].map((h) => isRadicalOnly({ hanzi: h }))).toEqual([true, true, true, true]);
     expect(['女', '水', '学生'].map((h) => isRadicalOnly({ hanzi: h }))).toEqual([false, false, false]);
+  });
+});
+
+describe('unlock order', () => {
+  const e = (hanzi: string, createdAt: number, learned = false, tags = ['L4']): Word => ({
+    id: hanzi, hanzi, pinyin: '', meaning: hanzi, tags, createdAt, updatedAt: 0,
+    skills: learned ? { meaning: { ease: 2.5, interval: 1, reps: 1, lapses: 0, due: '2026-10-20' } } : {},
+  });
+  it('puts characters that unlock the most words first, keeping lessons together', () => {
+    const pool = [e('上', 1), e('课', 2), e('电', 3), e('一', 0, false, ['L1'])];
+    const all = [...pool, e('话', 4, true), e('上课', 5), e('电话', 6), e('电脑', 7)];
+    const rank = unlockRank(pool, all);
+    const order = [...pool].sort((a, b) => rank.get(a.id)! - rank.get(b.id)!).map((w) => w.hanzi);
+    // 一 (L1) comes first: its lesson was added first. In L4, 电 unlocks 电话 right away; 脑 isn't in the list.
+    expect(order).toEqual(['一', '电', '上', '课']);
+    expect(planLearning(pool, null, all).ordered.map((w) => w.hanzi)).toEqual(['一', '电', '上', '课']);
   });
 });

@@ -1,4 +1,5 @@
 import { today } from './date';
+import { entryChars, isWordEntry } from './entries';
 import { deepComponents, type HanziDict } from './hanziDict';
 import { writableChars } from './strokes';
 import type { Word } from './types';
@@ -53,14 +54,51 @@ export interface LearnPlan {
 }
 
 /**
+ * Learn order among new characters: those of the same tag (lesson) stay together, lessons in the
+ * order they were added; within a lesson, characters that unlock the most of my words come first
+ * (a word whose other characters are all learned counts double: it unlocks right away).
+ * Returns each pool entry's rank.
+ */
+export function unlockRank(pool: Word[], all: Word[]): Map<string, number> {
+  const learned = new Set(all.filter((w) => !isWordEntry(w) && !!w.skills.meaning).map((w) => w.hanzi.trim()));
+  const inList = new Set(all.filter((w) => !isWordEntry(w)).map((w) => w.hanzi.trim()));
+  const poolChars = new Set(pool.map((w) => w.hanzi.trim()));
+  const score = new Map<string, number>();
+  for (const word of all) {
+    if (!isWordEntry(word) || word.unlockedOn) continue;
+    const chars = entryChars(word.hanzi);
+    if (chars.some((c) => !inList.has(c))) continue; // can't unlock: a character isn't in the list
+    for (const c of chars) {
+      if (!poolChars.has(c)) continue;
+      const others = chars.filter((x) => x !== c);
+      if (others.every((x) => learned.has(x))) score.set(c, (score.get(c) ?? 0) + 2);
+      else if (others.every((x) => learned.has(x) || poolChars.has(x))) score.set(c, (score.get(c) ?? 0) + 1);
+    }
+  }
+  const group = (w: Word) => w.tags[0]?.trim().toLowerCase() ?? '';
+  const groupStart = new Map<string, number>();
+  for (const w of pool) groupStart.set(group(w), Math.min(groupStart.get(group(w)) ?? Infinity, w.createdAt));
+  const ordered = [...pool].sort(
+    (a, b) =>
+      groupStart.get(group(a))! - groupStart.get(group(b))! ||
+      (score.get(b.hanzi.trim()) ?? 0) - (score.get(a.hanzi.trim()) ?? 0) ||
+      a.createdAt - b.createdAt,
+  );
+  return new Map(ordered.map((w, i) => [w.id, i]));
+}
+
+/**
  * Order new words so that parts come before wholes: a character before words that contain it
  * (学 before 学生), and — with Make Me a Hanzi data — components before characters built from
  * them (女 before 好). Without the data, words tagged "key" go first. Ties keep the order the
- * words were added.
+ * words were added, or, given the whole list (`all`), the unlock order (see unlockRank).
  */
-export function planLearning(words: Word[], dict: HanziDict | null): LearnPlan {
+export function planLearning(words: Word[], dict: HanziDict | null, all?: Word[]): LearnPlan {
   const isKey = (w: Word) => w.tags.some((t) => t.toLowerCase() === 'key');
-  const base = [...words].sort((a, b) => (dict ? 0 : Number(isKey(b)) - Number(isKey(a))) || a.createdAt - b.createdAt);
+  const unlockOrder = all ? unlockRank(words, all) : null;
+  const base = [...words].sort(
+    (a, b) => (dict ? 0 : Number(isKey(b)) - Number(isKey(a))) || (unlockOrder ? unlockOrder.get(a.id)! - unlockOrder.get(b.id)! : a.createdAt - b.createdAt),
+  );
   const singleChar = new Map<string, Word>();
   for (const w of base) if ([...w.hanzi.trim()].length === 1 && !singleChar.has(w.hanzi.trim())) singleChar.set(w.hanzi.trim(), w);
 

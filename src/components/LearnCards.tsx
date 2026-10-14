@@ -11,7 +11,7 @@ import { Icon } from './Icon';
 import { SpeakButton } from './SpeakButton';
 import { WordExamples, NotesBox } from './WordExtras';
 import { HanziText } from './HanziText';
-import { UsedIn } from './Entries';
+import { CharFormula, UsedIn } from './Entries';
 
 /** Play once when a card appears (respecting the auto-play setting), even under StrictMode. */
 function useAutoPlay(text: string) {
@@ -91,7 +91,7 @@ export function TeachCard({ word, onDone }: { word: Word; onDone(): void }) {
         {radical && <p className="hint">A radical form: you’ll learn to recognize it inside other characters.</p>}
         <ComponentLines word={word} />
         <NotesBox notes={word.notes} />
-        <UsedIn char={word} max={5} />
+        <UsedIn char={word} max={3} />
         <WordExamples word={word} pinyinVisible />
       </div>
       <button className="btn primary teach-done" onClick={onDone} autoFocus>
@@ -179,3 +179,29 @@ export function ListenChoice({
 }
 
 export const listeningAvailable = speechSupported;
+
+/** After a batch: a word whose last character was just learned ("上课 = 上 + 课, to attend class"). */
+export function UnlockCard({ word, onDone }: { word: Word; onDone(): void }) {
+  useAutoPlay(word.hanzi);
+  useEnterKey(onDone);
+  return (
+    <div className="practice teach-practice">
+      <div className="card teach-card unlock-card">
+        <div className="card-kicker">🔓 New word unlocked</div>
+        <div className="teach-head">
+          <span className="teach-hanzi" lang="zh-CN">
+            <HanziText text={word.hanzi} />
+          </span>
+          <SpeakButton text={word.hanzi} size={26} />
+        </div>
+        <div className="pinyin big">{word.pinyin}</div>
+        <div className="teach-meaning">{word.meaning}</div>
+        <CharFormula word={word} />
+        <WordExamples word={word} pinyinVisible />
+      </div>
+      <button className="btn primary teach-done" onClick={onDone} autoFocus>
+        Got it
+      </button>
+    </div>
+  );
+}

@@ -4,13 +4,14 @@ import { loadHanziDict, type HanziDict } from '../lib/hanziDict';
 import { isRadicalOnly, learnedToday, nextBatch, planLearning, type LearnPlan } from '../lib/learn';
 import { today } from '../lib/date';
 import { useSettings } from '../lib/settings';
-import { learnedSkills, newSrs, recordAnswer, type SkillStats } from '../lib/srs';
+import { isLearned, learnedSkills, newSrs, recordAnswer, type SkillStats } from '../lib/srs';
+import { entryChars, isWordEntry, recordWordAnswer } from '../lib/entries';
 import { shuffle } from '../lib/words';
 import type { Skill, Word } from '../lib/types';
 import { Icon } from './Icon';
 import { QuietBadge } from './QuietBadge';
 import { endQuietSession, isQuiet, startQuiet } from '../lib/quiet';
-import { ListenChoice, listeningAvailable, TeachCard } from './LearnCards';
+import { ListenChoice, listeningAvailable, TeachCard, UnlockCard } from './LearnCards';
 import { MultipleChoice } from './MultipleChoice';
 import { Typing } from './Typing';
 import { HanziText } from './HanziText';
@@ -35,6 +36,8 @@ type Stage =
   | { kind: 'teach'; i: number }
   | { kind: 'check'; i: number }
   | { kind: 'round'; r: number; queue: string[] }
+  /** Words the batch just unlocked: a short card, then one easy meaning question each. */
+  | { kind: 'unlocked'; list: string[]; i: number; quiz: boolean }
   | { kind: 'batchDone' }
   | { kind: 'summary' };
 
@@ -60,7 +63,7 @@ export function LearnSession({
   onFinish?(): void;
   finishLabel?: string;
 }) {
-  const { words, updateWords, recordReview, completeSession } = useStore();
+  const { words, updateWords, updateWord, recordReview, completeSession } = useStore();
   const { learnBatchSize, learnDailyLimit, learnTyping } = useSettings();
   // "Can't listen now" (here or recently): no listening round.
   const [listenOff, setListenOff] = useState(isQuiet);
@@ -76,6 +79,9 @@ export function LearnSession({
   const [stage, setStage] = useState<Stage>({ kind: 'loading' });
   const [step, setStep] = useState(0); // remount key for cards
   const [learned, setLearned] = useState<Word[]>([]);
+  /** Words unlocked by the current batch, and by the whole session. */
+  const [batchUnlocked, setBatchUnlocked] = useState<Word[]>([]);
+  const [unlockedAll, setUnlockedAll] = useState<Word[]>([]);
   const [misses, setMisses] = useState(0);
   const [answered, setAnswered] = useState(0);
   // Answers while learning, per word and skill; saved with the word when its batch is learned.
@@ -112,7 +118,8 @@ export function LearnSession({
       .catch(() => null)
       .then((d) => {
         if (!live) return;
-        const p = planLearning(pool, d);
+        // Characters that unlock the most of my words go first (see unlockRank).
+        const p = planLearning(pool, d, words);
         setDict(d);
         setPlan(p);
         startBatch(p, remaining, d);
@@ -159,7 +166,18 @@ export function LearnSession({
       batch.forEach((w) => next.delete(w.id));
       return next;
     });
-    setStage({ kind: 'batchDone' });
+    // Words whose last missing character was in this batch.
+    const inBatch = new Set(batch.map((w) => w.hanzi.trim()));
+    const learnedChars = new Set([...words.filter((w) => !isWordEntry(w) && !!w.skills.meaning).map((w) => w.hanzi.trim()), ...inBatch]);
+    const unlocked = words.filter((w) => {
+      if (!isWordEntry(w) || isLearned(w)) return false;
+      const cs = entryChars(w.hanzi);
+      return cs.length > 0 && cs.every((c) => learnedChars.has(c)) && cs.some((c) => inBatch.has(c));
+    });
+    setBatchUnlocked(unlocked);
+    setUnlockedAll((u) => [...u, ...unlocked]);
+    setStage(unlocked.length ? { kind: 'unlocked', list: unlocked.map((w) => w.id), i: 0, quiz: false } : { kind: 'batchDone' });
+    setStep((x) => x + 1);
   };
 
   // ---------- Rendering ----------
@@ -202,12 +220,12 @@ export function LearnSession({
     return (
       <div className="summary card">
         <div className="summary-score">{learned.length}</div>
-        <h2>{learned.length === 1 ? 'word learned' : 'words learned'}</h2>
+        <h2>{learned.length === 1 ? 'character learned' : 'characters learned'}</h2>
         <p className="muted">
           {learned.length ? 'They now come up in Practice.' : 'Nothing new to learn here.'}
           {answered > 0 && ` ${answered} answers, ${misses} missed and repeated.`}
         </p>
-        {limitReached && <p className="hint">Daily limit reached ({learnDailyLimit} new words). Change it in the Learn settings.</p>}
+        {limitReached && <p className="hint">Daily limit reached ({learnDailyLimit} new characters). Change it in the Learn settings.</p>}
         {learned.length > 0 && (
           <ul className="missed">
             {learned.map((w) => (
@@ -219,9 +237,53 @@ export function LearnSession({
             ))}
           </ul>
         )}
+        {unlockedAll.length > 0 && <UnlockedList words={unlockedAll} />}
         <button className="btn primary" onClick={onFinish ?? onExit} autoFocus>
           {finishLabel ?? 'Done'}
         </button>
+      </div>
+    );
+  }
+
+  if (stage.kind === 'unlocked') {
+    const w = liveWord(words.find((x) => x.id === stage.list[stage.i])!);
+    const next = () => {
+      if (stage.i + 1 < stage.list.length) setStage({ ...stage, i: stage.i + 1, quiz: false });
+      else setStage({ kind: 'batchDone' });
+      setStep((x) => x + 1);
+    };
+    // Distractors: other entries I know (learned characters and unlocked words).
+    const quizPool = withFill(
+      words.filter((x) => x.id !== w.id && isLearned(x)),
+      batch,
+      3,
+    );
+    return (
+      <div className="session">
+        {bar(`New word${stage.list.length > 1 ? ` ${stage.i + 1} of ${stage.list.length}` : ''}${stage.quiz ? ' · quick check' : ''}`, 1)}
+        {stage.quiz ? (
+          <MultipleChoice
+            key={step}
+            word={w}
+            allWords={quizPool}
+            direction="zh-en"
+            onAnswer={(q) => {
+              setAnswered((n) => n + 1);
+              recordReview().catch(() => {});
+              updateWord(recordWordAnswer(liveWord(w), q >= 3)).catch((e) => console.error('Failed to save answer', e));
+              next();
+            }}
+          />
+        ) : (
+          <UnlockCard
+            key={step}
+            word={w}
+            onDone={() => {
+              setStage({ ...stage, quiz: true });
+              setStep((x) => x + 1);
+            }}
+          />
+        )}
       </div>
     );
   }
@@ -236,9 +298,10 @@ export function LearnSession({
           <p className="lead" lang="zh-CN">
             {batch.map((w) => w.hanzi).join('  ')}
           </p>
+          {batchUnlocked.length > 0 && <UnlockedList words={batchUnlocked} />}
           <p className="muted">
             {more
-              ? `${Math.min(remaining.size, allowance)} more new word${Math.min(remaining.size, allowance) === 1 ? '' : 's'} available today.`
+              ? `${Math.min(remaining.size, allowance)} more new character${Math.min(remaining.size, allowance) === 1 ? '' : 's'} available today.`
               : allowance === 0
                 ? 'That’s your daily limit.'
                 : 'No new words left here.'}
@@ -325,6 +388,28 @@ export function LearnSession({
       )}
       {round === 'produce' && <MultipleChoice key={step} word={w} allWords={roundPool} direction="en-zh" onAnswer={answer} />}
       {round === 'typing' && <Typing key={step} word={w} onAnswer={answer} />}
+    </div>
+  );
+}
+
+/** "You unlocked N words", with the list. */
+function UnlockedList({ words }: { words: Word[] }) {
+  return (
+    <div className="unlocked-list">
+      <h3>
+        🔓 You unlocked {words.length} word{words.length === 1 ? '' : 's'}
+      </h3>
+      <ul className="missed">
+        {words.map((w) => (
+          <li key={w.id}>
+            <span className="hanzi" lang="zh-CN">
+              <HanziText text={w.hanzi} />
+            </span>
+            <span className="pinyin">{w.pinyin}</span>
+            <span className="meaning">{w.meaning}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

@@ -35,8 +35,22 @@ export function UsedIn({ char, onOpen, max }: { char: Word; onOpen?(w: Word): vo
   const { charLinks } = useStore();
   const all = charLinks.usedIn.get(char.id) ?? [];
   if (!all.length) return null;
-  // Unlocked words first, then by length.
-  const list = [...all].sort((a, b) => Number(isLearned(b)) - Number(isLearned(a)) || a.hanzi.length - b.hanzi.length).slice(0, max ?? all.length);
+  // Unlocked words first; then the ones whose other characters are learned (they unlock with this
+  // one), then ones from the same lesson (tag), then the shortest.
+  const othersLearned = (w: Word) => {
+    const others = (charLinks.charsOf.get(w.id) ?? []).filter((s) => s.char !== char.hanzi.trim());
+    return others.length ? others.filter((s) => s.entry && isLearned(s.entry)).length / others.length : 1;
+  };
+  const sameTag = (w: Word) => Number(w.tags.some((t) => char.tags.includes(t)));
+  const list = [...all]
+    .sort(
+      (a, b) =>
+        Number(isLearned(b)) - Number(isLearned(a)) ||
+        othersLearned(b) - othersLearned(a) ||
+        sameTag(b) - sameTag(a) ||
+        a.hanzi.length - b.hanzi.length,
+    )
+    .slice(0, max ?? all.length);
   return (
     <div className="used-in">
       <div className="field-label">Used in</div>
