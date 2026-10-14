@@ -5,6 +5,7 @@
 import { convert } from 'pinyin-pro';
 import { toPinyin } from './pinyin';
 import { newId, normalizeTags, parseTagText } from './words';
+import { parseAlignments } from './hints';
 import type { Dialogue, Sentence, SentenceInput, Word } from './types';
 
 const CJK = /[㐀-鿿豈-﫿]/;
@@ -21,6 +22,7 @@ export function cleanSentenceInput(input: SentenceInput): SentenceInput {
     wordIds: input.wordIds?.length ? [...new Set(input.wordIds)] : undefined,
     tatoebaId: input.tatoebaId,
     alternatives: input.alternatives?.map((a) => a.trim()).filter(Boolean).length ? input.alternatives.map((a) => a.trim()).filter(Boolean) : undefined,
+    alignments: input.alignments && Object.keys(input.alignments).length ? input.alignments : undefined,
   };
 }
 
@@ -196,10 +198,12 @@ Rules:
 - translation: a natural English translation (required; never use "|" inside a field)
 - tags: comma-separated labels such as the lesson or topic, or leave it empty
 - Every line must have exactly 3 "|" separators, even when a field is empty
+- Optionally, after a sentence, add a line "alignments:" pairing English words of the translation with the Chinese they translate, separated by ";" (e.g. alignments: name=名字; what=什么)
 - No header row, no numbering, no markdown table, no code block
 
 Example output:
 你叫什么名字？ | nǐ jiào shénme míngzi? | What is your name? | lesson 1
+alignments: what=什么; name=名字
 我是学生。 |  | I am a student. | lesson 1`;
 
 export const DIALOGUE_PROMPT = `The attached photo or file is a Chinese lesson (for example a textbook page or lesson slide). Output its dialogue (课文) in this exact format, one line of the dialogue per line, in order, with no other text before or after:
@@ -215,6 +219,7 @@ Rules:
 - translation: a natural English translation (required; never use "|" inside a field)
 - tags: comma-separated labels such as the lesson, or leave it empty
 - Every line must have exactly 3 "|" separators, even when a field is empty
+- Optionally, after a line, add a line "alignments:" pairing English words of the translation with the Chinese they translate, separated by ";" (e.g. alignments: name=名字; what=什么)
 - No title line, no header row, no numbering, no markdown table, no code block
 
 Example output:
@@ -238,6 +243,8 @@ export interface SentenceBulkResult {
 }
 
 const EXTRA_MARKER = /^-{2,}\s*(examples?|例句|extra)/i;
+/** "alignments: I=我; like=喜欢" after a sentence line. */
+const ALIGN_LINE = /^(?:[-*•]\s*)?alignments?\s*[:：]\s*(.+)$/i;
 /** "A:", "Wang Ming:", "王老师：" before the sentence of a dialogue line. */
 const SPEAKER = /^([A-Za-z][A-Za-z0-9 .]{0,15}|[㐀-鿿·]{1,6})\s*[:：]\s*/;
 const LIST_MARKER = /^\s*(?:\d+[.)、]|[-*•])\s+/;
@@ -255,6 +262,13 @@ export function parseSentenceBulk(input: string, dialogue = false): SentenceBulk
     if (!t || t.startsWith('```') || /^\|?\s*:?-{2,}\s*\|/.test(t)) return;
     if (EXTRA_MARKER.test(t)) {
       extra = true;
+      return;
+    }
+    const align = t.match(ALIGN_LINE);
+    if (align) {
+      const prev = rows[rows.length - 1];
+      const parsed = parseAlignments(align[1]);
+      if (prev && parsed) prev.input = { ...prev.input, alignments: parsed };
       return;
     }
     if (!t.includes('|')) {

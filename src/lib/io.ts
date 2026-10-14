@@ -83,11 +83,19 @@ export function normalizeSentence(raw: unknown, fallbackTime: number = Date.now(
     wordIds: ids.length ? ids : undefined,
     tatoebaId: typeof r.tatoebaId === 'number' ? r.tatoebaId : undefined,
     alternatives: alternativesOf(r.alternatives),
+    alignments: alignmentsOf(r.alignments),
     ...sentenceSkills(r.skills, r.learnedOn),
     createdAt: num(r.createdAt, fallbackTime),
     updatedAt: num(r.updatedAt, fallbackTime),
   };
 }
+
+const alignmentsOf = (v: unknown): Record<string, string> | undefined => {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return undefined;
+  const out: Record<string, string> = {};
+  for (const [k, x] of Object.entries(v as Record<string, unknown>)) if (typeof x === 'string' && x.trim() && k.trim()) out[k.trim().toLowerCase()] = x.trim();
+  return Object.keys(out).length ? out : undefined;
+};
 
 const alternativesOf = (v: unknown): string[] | undefined => {
   const list = Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string').map((x) => x.trim()).filter(Boolean) : [];

@@ -105,3 +105,11 @@ describe('filling translations', () => {
     expect([...map.values()]).toEqual(['I am a student.', 'Hello!']);
   });
 });
+
+describe('alignment lines', () => {
+  it('attach to the sentence before them', () => {
+    const { rows } = parseSentenceBulk('你叫什么名字？ |  | What is your name? | L1\nalignments: what=什么; name=名字\n我是学生。 |  | I am a student. |');
+    expect(rows[0].input.alignments).toEqual({ what: '什么', name: '名字' });
+    expect(rows[1].input.alignments).toBeUndefined();
+  });
+});

@@ -119,6 +119,8 @@ export interface Sentence {
   tatoebaId?: number;
   /** Other correct ways to say it (accepted when building or typing the sentence). */
   alternatives?: string[];
+  /** Which Chinese an English word of the translation stands for (lowercase English → Chinese), for hints. */
+  alignments?: Record<string, string>;
   /** Review schedules, set once the sentence is learned in Learn (none = new). */
   skills?: SentenceSkills;
   /** Local date the sentence was learned. */
@@ -131,7 +133,7 @@ export interface Sentence {
 export type SentenceSkill = 'understand' | 'produce';
 export type SentenceSkills = Partial<Record<SentenceSkill, SkillState>>;
 
-export type SentenceInput = Pick<Sentence, 'zh' | 'pinyin' | 'translation' | 'tags' | 'notes' | 'wordIds' | 'tatoebaId' | 'alternatives'>;
+export type SentenceInput = Pick<Sentence, 'zh' | 'pinyin' | 'translation' | 'tags' | 'notes' | 'wordIds' | 'tatoebaId' | 'alternatives' | 'alignments'>;
 
 export interface DialogueLine {
   sentenceId: string;

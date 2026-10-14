@@ -9,6 +9,7 @@ import { Icon } from './Icon';
 import { Modal } from './Modal';
 import { SpeakButton } from './SpeakButton';
 import { TatoebaCredit } from './WordExtras';
+import { formatAlignments, parseAlignments } from '../lib/hints';
 
 /** The words of my list that a sentence contains, as tappable chips. */
 export function WordChips({ words, onOpen }: { words: Word[]; onOpen(w: Word): void }) {
@@ -119,6 +120,8 @@ export function SentenceForm({ sentence, onClose }: { sentence?: Sentence; onClo
   const [notes, setNotes] = useState(sentence?.notes ?? '');
   // Other correct ways to say it, one per line.
   const [altText, setAltText] = useState(sentence?.alternatives?.join('\n') ?? '');
+  // "I=我; like=喜欢": which Chinese an English word stands for (hints).
+  const [alignText, setAlignText] = useState(formatAlignments(sentence?.alignments));
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const dialogue = sentence?.dialogueId ? dialogues.find((d) => d.id === sentence.dialogueId) : undefined;
@@ -138,7 +141,7 @@ export function SentenceForm({ sentence, onClose }: { sentence?: Sentence; onClo
       .split(/\r?\n/)
       .map((a) => a.trim())
       .filter(Boolean);
-    const input = { zh, pinyin: pinyinAuto ? toPinyin(zh) : pinyin, translation, tags: parseTagText(tagText), notes, alternatives };
+    const input = { zh, pinyin: pinyinAuto ? toPinyin(zh) : pinyin, translation, tags: parseTagText(tagText), notes, alternatives, alignments: parseAlignments(alignText) };
     try {
       if (sentence) await updateSentences([{ ...sentence, ...input }]);
       else await addSentences([{ ...input, wordIds: undefined }]);
@@ -200,6 +203,13 @@ export function SentenceForm({ sentence, onClose }: { sentence?: Sentence; onClo
           </span>
           <textarea className="input" rows={2} value={altText} onChange={(e) => setAltText(e.target.value)} lang="zh-CN" placeholder="我在学中文字。" />
           <span className="hint">Other ways to say it, accepted when you build or type this sentence.</span>
+        </label>
+        <label className="field">
+          <span className="field-label">
+            Word alignments <span className="optional">optional</span>
+          </span>
+          <input className="input" value={alignText} onChange={(e) => setAlignText(e.target.value)} placeholder="I=我; like=喜欢; cook=做饭" />
+          <span className="hint">Which Chinese an English word of the translation stands for: tapping it in an exercise shows that Chinese.</span>
         </label>
         <label className="field">
           <span className="field-label">
