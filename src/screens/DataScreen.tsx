@@ -11,7 +11,7 @@ import { hanziDictCached, loadHanziDict } from '../lib/hanziDict';
 import { Segmented } from '../components/Segmented';
 import { BulkAdd } from '../components/BulkAdd';
 import { SyncCard } from '../components/SyncCard';
-import { ReadableStats, SkillStats } from '../components/SkillStats';
+import { EntryProgressStats, ReadableStats, SkillStats } from '../components/SkillStats';
 import { TatoebaBulk } from '../components/Sentences';
 import { corpusCached, loadCorpus } from '../lib/tatoeba';
 
@@ -69,6 +69,8 @@ export function DataScreen() {
           <Stat value={leeches} label="🐛 leeches" />
         </div>
       </div>
+
+      <EntryProgressStats words={words} />
 
       <SkillStats words={words} />
 

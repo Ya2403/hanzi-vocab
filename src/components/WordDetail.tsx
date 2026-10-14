@@ -10,6 +10,10 @@ import { Icon } from './Icon';
 import { Modal } from './Modal';
 import { SpeakButton } from './SpeakButton';
 import { LeechBadge, NotesBox, WordExamples } from './WordExtras';
+import { entryKind } from '../lib/entries';
+import { CharFormula, LockState, UsedIn, WordStatsBox } from './Entries';
+
+const KIND_TITLE = { char: 'Character', word: 'Word', name: 'Name' } as const;
 import { HanziText } from './HanziText';
 
 export function WordDetail({ word: initial, onClose, onEdit }: { word: Word; onClose(): void; onEdit(w: Word): void }) {
@@ -36,9 +40,11 @@ export function WordDetail({ word: initial, onClose, onEdit }: { word: Word; onC
   };
 
   const status = isNew(word) ? 'New: not learned yet (learn it in the Learn tab)' : `Learned · ${strength(word)}`;
+  const kind = entryKind(word);
+  const open = (w: Word) => setStack((st) => [...st, w.id]);
 
   return (
-    <Modal title="Word" onClose={onClose}>
+    <Modal title={KIND_TITLE[kind]} onClose={onClose}>
       <div className="word-detail" key={word.id}>
         {stack.length > 1 && (
           <button type="button" className="link-btn" onClick={() => setStack((st) => st.slice(0, -1))}>
@@ -60,7 +66,11 @@ export function WordDetail({ word: initial, onClose, onEdit }: { word: Word; onC
         <div className="detail-meaning">{word.meaning}</div>
         <NotesBox notes={word.notes} />
 
-        <WordExamples word={word} pinyinVisible={listPinyin} max={3} />
+        {kind !== 'char' && <CharFormula word={word} onOpen={open} />}
+
+        <WordExamples word={word} pinyinVisible={listPinyin} max={kind === 'char' ? 3 : 5} />
+
+        {kind === 'char' && <UsedIn char={word} onOpen={open} />}
 
         {word.tags.length > 0 && (
           <div className="word-meta">
@@ -72,18 +82,30 @@ export function WordDetail({ word: initial, onClose, onEdit }: { word: Word; onC
           </div>
         )}
 
-        <div className="detail-progress small">
-          {isLeech(word) && (
-            <>
-              <LeechBadge skills={leechSkills(word)} />{' '}
-            </>
-          )}
-          <b>{status}</b>
-          {word.toneErrors ? <span className="muted"> · {word.toneErrors} tone error{word.toneErrors === 1 ? '' : 's'}</span> : null}
-          <SkillTable word={word} />
-        </div>
+        {kind !== 'char' ? (
+          <div className="detail-progress small">
+            <LockState word={word} />
+            <WordStatsBox word={word} />
+          </div>
+        ) : (
+          <div className="detail-progress small">
+            {isLeech(word) && (
+              <>
+                <LeechBadge skills={leechSkills(word)} />{' '}
+              </>
+            )}
+            <b>{status}</b>
+            {word.toneErrors ? (
+              <span className="muted">
+                {' '}
+                · {word.toneErrors} tone error{word.toneErrors === 1 ? '' : 's'}
+              </span>
+            ) : null}
+            <SkillTable word={word} />
+          </div>
+        )}
 
-        <Breakdown word={word} pinyinVisible={pinyinShown} onOpenWord={(w) => setStack((st) => [...st, w.id])} />
+        {kind === 'char' && <Breakdown word={word} pinyinVisible={pinyinShown} onOpenWord={open} />}
 
         <div className="form-actions">
           <button type="button" className="btn ghost danger-text" onClick={remove}>

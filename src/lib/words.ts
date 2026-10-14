@@ -13,6 +13,7 @@ export function cleanInput(input: WordInput): WordInput {
     meaning: input.meaning.trim(),
     notes: notes || undefined,
     tags: normalizeTags(input.tags),
+    kind: input.kind,
   };
 }
 

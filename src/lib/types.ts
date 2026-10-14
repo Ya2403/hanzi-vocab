@@ -72,10 +72,30 @@ export interface Word {
   learnedOn?: string;
   /** Pinyin answers with the right syllables but wrong tones. */
   toneErrors?: number;
+  /** Character, word or name, when set by hand (otherwise detected, see entries.ts). */
+  kind?: 'char' | 'word' | 'name';
+  /** Words and names: answer statistics (they have no schedule). */
+  stats?: WordStats;
+  /** Words and names: the date all their characters were learned (unset while locked). */
+  unlockedOn?: string;
+  /** Words and names: their per-skill progress from before characters and words (kept, unused). */
+  legacySkills?: Skills;
+}
+
+/** Background statistics of a word: accuracy, the last 5 results ("1" = right), when seen, "needs work". */
+export interface WordStats {
+  answered: number;
+  correct: number;
+  recent: string;
+  lastSeen?: number;
+  /** Right answers in a row (2 clear "needs work"). */
+  okStreak?: number;
+  /** Set by a miss or a lookup. */
+  needsWork?: boolean;
 }
 
 /** Fields the user edits directly. */
-export type WordInput = Pick<Word, 'hanzi' | 'pinyin' | 'meaning' | 'notes' | 'tags'>;
+export type WordInput = Pick<Word, 'hanzi' | 'pinyin' | 'meaning' | 'notes' | 'tags'> & Partial<Pick<Word, 'kind'>>;
 
 /** A word as added by hand or in bulk; `example` becomes a Sentence linked to the word. */
 export type NewWord = WordInput & { example?: string };

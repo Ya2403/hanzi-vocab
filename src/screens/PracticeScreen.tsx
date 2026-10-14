@@ -5,6 +5,7 @@ import { today } from '../lib/date';
 import { balanceHint, pickSession } from '../lib/planner';
 import { updateSettings, useSettings } from '../lib/settings';
 import { isLearned } from '../lib/srs';
+import { isCharEntry } from '../lib/entries';
 import { liveStreak } from '../lib/streak';
 import type { Dialogue, Skill, Word } from '../lib/types';
 import { TodayReadingCard } from '../components/DailyReading';
@@ -34,7 +35,8 @@ export function PracticeScreen({ onGoToLearn, onGoToWords }: { onGoToLearn(): vo
   const [session, setSession] = useState<{ words: Word[]; skillFor: Map<string, Skill>; key: number; reading?: Dialogue } | null>(null);
   const [reading, setReading] = useState<Dialogue | null>(null);
 
-  const learned = useMemo(() => words.filter(isLearned), [words]);
+  // Sessions pick character skills (words come in through their characters).
+  const learned = useMemo(() => words.filter((w) => isCharEntry(w) && isLearned(w)), [words]);
   const pool = wordsInTags(learned, tags);
   const size = Number(SIZES.includes(String(settings.practiceSize) as (typeof SIZES)[number]) ? settings.practiceSize : 20);
   const pending = pendingReading(dialogues);

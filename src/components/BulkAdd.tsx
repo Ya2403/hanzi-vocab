@@ -5,6 +5,8 @@ import { createWord, parseTagText } from '../lib/words';
 import type { NewWord, Word } from '../lib/types';
 import { Segmented } from './Segmented';
 import { Modal } from './Modal';
+import { detectKind, entryChars } from '../lib/entries';
+import { loadHanziDict, missingCharInputs } from '../lib/hanziDict';
 
 const PREVIEW_LIMIT = 200;
 
@@ -14,6 +16,7 @@ export function BulkAdd({ onClose }: { onClose(): void }) {
   const [mode, setMode] = useState<'tags' | 'new' | 'update' | 'replace'>('tags');
   const [text, setText] = useState('');
   const [extraTags, setExtraTags] = useState('');
+  const [addMissing, setAddMissing] = useState(true);
   const [copied, setCopied] = useState<'ok' | 'failed' | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,6 +50,20 @@ export function BulkAdd({ onClose }: { onClose(): void }) {
     return [...p.tags, ...extraTagList].filter((t) => !have.has(t.toLowerCase()));
   };
   const tagged = mode === 'tags' ? existingRows.filter((r) => newTagsFor(byHanzi.get(r.word.hanzi)!, r.word).length > 0) : [];
+  // Characters of pasted words that are neither in the list nor pasted themselves.
+  const missing = useMemo(() => {
+    const have = new Set([...words.map((w) => w.hanzi.trim()), ...preview.map((r) => r.word.hanzi.trim())]);
+    const out: { char: string; from: string; tags: string[] }[] = [];
+    for (const r of preview) {
+      if (detectKind(r.word) === 'char') continue;
+      for (const c of entryChars(r.word.hanzi)) {
+        if (have.has(c)) continue;
+        have.add(c);
+        out.push({ char: c, from: r.word.hanzi, tags: r.word.tags });
+      }
+    }
+    return out;
+  }, [preview, words]);
   const count = mode === 'new' ? fresh.length : mode === 'tags' ? fresh.length + tagged.length : fresh.length + existingRows.length;
 
   const copyPrompt = async () => {
@@ -123,6 +140,10 @@ export function BulkAdd({ onClose }: { onClose(): void }) {
           list.push(old ? merged(old, r.word) : { ...createWord(fresh, now + i), example: fresh.example || undefined });
         });
         await importData({ words: list, sentences, dialogues, hasSentences: true }, 'replace');
+      }
+      if (addMissing && missing.length) {
+        const dict = await loadHanziDict().catch(() => null);
+        await addWords(missingCharInputs(missing.map((m) => ({ ...m, tags: [...m.tags, ...extra] })), dict));
       }
       onClose();
     } catch (e) {
@@ -246,6 +267,7 @@ export function BulkAdd({ onClose }: { onClose(): void }) {
                   <span className="hanzi" lang="zh-CN">{r.word.hanzi}</span>
                   <span className="pinyin">{r.word.pinyin}</span>
                   <span className="meaning">{r.word.meaning}</span>
+                  {detectKind(r.word) !== 'char' && <span className="status kind">{detectKind(r.word)}</span>}
                   {r.status !== 'new' && <span className="status">{r.status === 'exists' ? 'in list' : 'repeat'}</span>}
                   {r.word.tags.map((t) => (
                     <span key={t} className="tag">{t}</span>
@@ -257,13 +279,23 @@ export function BulkAdd({ onClose }: { onClose(): void }) {
           </div>
         )}
 
+        {missing.length > 0 && (
+          <label className="toggle">
+            <input type="checkbox" checked={addMissing} onChange={(e) => setAddMissing(e.target.checked)} />
+            <span>
+              Add missing characters ({missing.length}): <span lang="zh-CN">{missing.map((m) => m.char).join(' ')}</span>
+              <span className="hint"> Pinyin and meaning come from the character data; they get the word’s tags.</span>
+            </span>
+          </label>
+        )}
+
         {error && <p className="hint error">{error}</p>}
 
         <div className="form-actions">
           <button type="button" className="btn ghost" onClick={onClose}>
             Cancel
           </button>
-          <button type="button" className={`btn primary ${mode === 'replace' ? 'danger-btn' : ''}`} disabled={!count || saving} onClick={add}>
+          <button type="button" className={`btn primary ${mode === 'replace' ? 'danger-btn' : ''}`} disabled={(!count && !(addMissing && missing.length)) || saving} onClick={add}>
             {mode === 'replace'
               ? `Replace list (${count} words)`
               : mode === 'update' && existingRows.length

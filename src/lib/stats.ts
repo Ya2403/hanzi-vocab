@@ -2,6 +2,7 @@ import { isRusty, strength, type Strength } from './planner';
 import { isReadable } from './sentenceLearn';
 import type { Links } from './sentences';
 import { isLearned } from './srs';
+import { isCharEntry } from './entries';
 import type { Dialogue, Sentence, Word } from './types';
 
 export interface StrengthCounts {
@@ -13,9 +14,11 @@ export interface StrengthCounts {
   rusty: number;
 }
 
+/** Characters by strength (words and names have no schedule). */
 export function strengthCounts(words: Word[], now: number = Date.now()): StrengthCounts {
   const c: StrengthCounts = { new: 0, weak: 0, medium: 0, strong: 0, rusty: 0 };
   for (const w of words) {
+    if (!isCharEntry(w)) continue;
     if (!isLearned(w)) {
       c.new++;
       continue;
@@ -28,8 +31,9 @@ export function strengthCounts(words: Word[], now: number = Date.now()): Strengt
 
 /** Words by strength, per tag. */
 export function strengthByTag(words: Word[], now: number = Date.now()): ({ tag: string } & StrengthCounts)[] {
-  const tags = [...new Set(words.flatMap((w) => w.tags))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-  return tags.map((tag) => ({ tag, ...strengthCounts(words.filter((w) => w.tags.includes(tag)), now) }));
+  const chars = words.filter(isCharEntry);
+  const tags = [...new Set(chars.flatMap((w) => w.tags))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  return tags.map((tag) => ({ tag, ...strengthCounts(chars.filter((w) => w.tags.includes(tag)), now) }));
 }
 
 /** Learned words with tone errors, most first. */
@@ -55,4 +59,31 @@ export function readableStats(sentences: Sentence[], dialogues: Dialogue[], link
       .sort((a, b) => a.title.localeCompare(b.title, undefined, { numeric: true }))
       .map((d) => ({ dialogue: d, ...readableOf(d.lines.map((l) => byId.get(l.sentenceId)).filter((s): s is Sentence => !!s), links) })),
   };
+}
+
+export interface EntryProgress {
+  charsLearned: number;
+  chars: number;
+  wordsUnlocked: number;
+  words: number;
+}
+
+function progressOf(list: Word[]): EntryProgress {
+  const p: EntryProgress = { charsLearned: 0, chars: 0, wordsUnlocked: 0, words: 0 };
+  for (const w of list) {
+    if (isCharEntry(w)) {
+      p.chars++;
+      if (isLearned(w)) p.charsLearned++;
+    } else {
+      p.words++;
+      if (isLearned(w)) p.wordsUnlocked++;
+    }
+  }
+  return p;
+}
+
+/** Characters learned and words (and names) unlocked: overall and per tag. */
+export function entryProgress(words: Word[]): { all: EntryProgress; tags: ({ tag: string } & EntryProgress)[] } {
+  const tags = [...new Set(words.flatMap((w) => w.tags))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  return { all: progressOf(words), tags: tags.map((tag) => ({ tag, ...progressOf(words.filter((w) => w.tags.includes(tag))) })) };
 }

@@ -5,6 +5,7 @@
 import { retrievability } from './fsrs';
 import { segment } from './sentences';
 import { splitKnown } from './sentenceLearn';
+import { isWordEntry } from './entries';
 import { isLearned, skillState } from './srs';
 import type { Word } from './types';
 
@@ -60,7 +61,8 @@ export const READ_REVIEW_BELOW = 0.9;
  */
 export function finishPlan(tokens: Token[], lookedUp: Set<string>, now: number = Date.now()): { review: Word[]; seen: Word[] } {
   const words = new Map<string, Word>();
-  for (const t of tokens) if (t.kind === 'learned' && t.word && !lookedUp.has(t.word.id)) words.set(t.word.id, t.word);
+  // Characters only: words and names have no schedule.
+  for (const t of tokens) if (t.kind === 'learned' && t.word && !isWordEntry(t.word) && !lookedUp.has(t.word.id)) words.set(t.word.id, t.word);
   const review: Word[] = [];
   const seen: Word[] = [];
   for (const w of words.values()) (retrievability(skillState(w, 'meaning'), now) < READ_REVIEW_BELOW ? review : seen).push(w);

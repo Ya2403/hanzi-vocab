@@ -3,6 +3,7 @@ import { useStore } from '../store';
 import { learnedToday } from '../lib/learn';
 import { updateSettings, useSettings } from '../lib/settings';
 import { isNew } from '../lib/srs';
+import { isCharEntry } from '../lib/entries';
 import type { Word } from '../lib/types';
 import { LearnSession } from '../components/LearnSession';
 import { Segmented } from '../components/Segmented';
@@ -13,7 +14,8 @@ export function LearnScreen({ onGoToWords }: { onGoToWords(): void }) {
   const { learnBatchSize, learnDailyLimit, learnTyping } = useSettings();
   const [tags, setTags] = useState<string[]>([]);
   const [session, setSession] = useState<{ pool: Word[]; title: string } | null>(null);
-  const newWords = words.filter(isNew);
+  // Only characters are learned here; words unlock once their characters are learned.
+  const newWords = words.filter((w) => isCharEntry(w) && isNew(w));
   const pool = wordsInTags(newWords, tags);
   const doneToday = learnedToday(words);
   const allowance = Math.max(0, learnDailyLimit - doneToday);
@@ -27,7 +29,7 @@ export function LearnScreen({ onGoToWords }: { onGoToWords(): void }) {
         <div className="hero-stats">
           <div>
             <div className="stat-value">{newWords.length}</div>
-            <div className="stat-label">new words</div>
+            <div className="stat-label">new characters</div>
           </div>
           <div>
             <div className="stat-value">
@@ -42,15 +44,15 @@ export function LearnScreen({ onGoToWords }: { onGoToWords(): void }) {
           </div>
         </div>
         <p className="muted small">
-          Each word gets a teaching card and a quick check, then the batch goes through rounds: meaning, listening, EN → 中
-          {learnTyping ? ', typing' : ''}. Learned words then come up in Practice.
+          Each character gets a teaching card and a quick check, then the batch goes through rounds: meaning, listening, EN → 中
+          {learnTyping ? ', typing' : ''}. Learned characters come up in Practice, and words unlock once all their characters are learned.
         </p>
       </div>
 
       {!newWords.length ? (
         <div className="card empty">
-          <h2>No new words to learn</h2>
-          <p>Every word in your list has been learned. Add more words to keep going.</p>
+          <h2>No new characters to learn</h2>
+          <p>Every character in your list has been learned. Add more words or characters to keep going.</p>
           <button className="btn primary" onClick={onGoToWords}>
             Go to word list
           </button>
@@ -58,16 +60,16 @@ export function LearnScreen({ onGoToWords }: { onGoToWords(): void }) {
       ) : (
         <div className="card form setup-card">
           <div className="setup-col">
-            <TagPicker words={newWords} selected={tags} onChange={setTags} label="Learn from (new words)" />
+            <TagPicker words={newWords} selected={tags} onChange={setTags} label="Learn from (new characters)" />
             <button
               className="btn primary block"
               disabled={!toLearn}
               onClick={() => setSession({ pool, title: tags.length ? `Learn · ${tags.map(tagLabel).join(', ')}` : 'Learn' })}
             >
-              {toLearn ? `Start learning (${toLearn} word${toLearn === 1 ? '' : 's'})` : allowance === 0 ? 'Daily limit reached' : 'Nothing new here'}
+              {toLearn ? `Start learning (${toLearn} character${toLearn === 1 ? '' : 's'})` : allowance === 0 ? 'Daily limit reached' : 'Nothing new here'}
             </button>
             {allowance === 0 && (
-              <p className="hint">You’ve learned {doneToday} new words today, your daily limit. Come back tomorrow, or raise the limit.</p>
+              <p className="hint">You’ve learned {doneToday} new characters today, your daily limit. Come back tomorrow, or raise the limit.</p>
             )}
           </div>
           <div className="setup-col">
@@ -83,7 +85,7 @@ export function LearnScreen({ onGoToWords }: { onGoToWords(): void }) {
               ]}
             />
             <label className="field">
-              <span className="field-label">New words per day</span>
+              <span className="field-label">New characters per day</span>
               <input
                 className="input narrow"
                 type="number"

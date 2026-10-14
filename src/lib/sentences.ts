@@ -126,7 +126,16 @@ export function computeLinks(sentences: Sentence[], words: Word[]): Links {
       .map((id) => byId.get(id))
       .filter((w): w is Word => !!w);
     bySentence.set(s.id, linked);
-    for (const w of linked) byWord.set(w.id, [...(byWord.get(w.id) ?? []), s]);
+    // A character is also used by the sentences of the words it's part of (课 in 我们上课, via 上课).
+    const users = new Set(linked.map((w) => w.id));
+    for (const w of linked) {
+      if ([...w.hanzi].length < 2) continue;
+      for (const c of new Set(w.hanzi)) {
+        const ch = byHanzi.get(c);
+        if (ch) users.add(ch.id);
+      }
+    }
+    for (const id of users) byWord.set(id, [...(byWord.get(id) ?? []), s]);
   }
   return { bySentence, byWord };
 }

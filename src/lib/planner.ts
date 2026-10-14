@@ -272,9 +272,9 @@ export function pickSession(words: Word[], size: number, opts: { now?: number; r
   return chosen;
 }
 
-/** Balance hint: many rusty words → refresh first; few → a good time to learn new words. */
+/** Balance hint: many rusty characters → refresh first; few → a good time to learn new ones. */
 export function balanceHint(words: Word[], now: number = Date.now()): { rusty: number; learned: number; refresh: boolean } {
-  const learned = words.filter(isLearned);
+  const learned = words.filter((w) => activeSkills(w).length > 0);
   const rusty = learned.filter((w) => isRusty(w, now)).length;
   return { rusty, learned: learned.length, refresh: rusty >= Math.max(5, learned.length * 0.2) };
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { computeLinks, createSentence } from './sentences';
-import { readableStats, strengthByTag, strengthCounts, toneTrouble } from './stats';
+import { entryProgress, readableStats, strengthByTag, strengthCounts, toneTrouble } from './stats';
 import { newSrs } from './srs';
 import type { Dialogue, SkillState, Word } from './types';
 
@@ -53,5 +53,17 @@ describe('readable sentences', () => {
     expect(r.all).toEqual({ readable: 1, total: 2 });
     expect(r.tags).toEqual([{ tag: 'lesson 1', readable: 1, total: 2 }]);
     expect(r.dialogues.map((x) => [x.dialogue.title, x.readable, x.total])).toEqual([['第一课', 1, 2]]);
+  });
+});
+
+describe('characters and words', () => {
+  it('counts characters learned and words unlocked, per tag', () => {
+    const e = (hanzi: string, learned: boolean, tags: string[], unlockedOn?: string): Word => ({
+      id: hanzi, hanzi, pinyin: '', meaning: hanzi, tags, createdAt: 0, updatedAt: 0, unlockedOn,
+      skills: learned ? { meaning: { ease: 2.5, interval: 1, reps: 1, lapses: 0, due: '2026-10-20' } } : {},
+    });
+    const { all, tags } = entryProgress([e('上', true, ['L4']), e('课', false, ['L4']), e('上课', false, ['L4']), e('电话', false, ['L4'], '2026-10-01')]);
+    expect(all).toEqual({ charsLearned: 1, chars: 2, wordsUnlocked: 1, words: 2 });
+    expect(tags).toEqual([{ tag: 'L4', charsLearned: 1, chars: 2, wordsUnlocked: 1, words: 2 }]);
   });
 });

@@ -10,6 +10,11 @@ import { Modal } from './Modal';
 import { SpeakButton } from './SpeakButton';
 import { Icon } from './Icon';
 import { FindSentences } from './Sentences';
+import { Segmented } from './Segmented';
+import { LockState } from './Entries';
+import { detectKind, isCharEntry, type EntryKind } from '../lib/entries';
+
+const KIND_LABEL: Record<EntryKind, string> = { char: 'Character', word: 'Word', name: 'Name' };
 
 /** `initial`: prefilled fields for a new word (e.g. a word tapped in the reader). */
 export function WordForm({ word, initial, onClose }: { word?: Word; initial?: Partial<Pick<Word, 'hanzi' | 'pinyin' | 'meaning' | 'tags'>>; onClose(): void }) {
@@ -36,6 +41,8 @@ export function WordForm({ word, initial, onClose }: { word?: Word; initial?: Pa
       updateWord({ ...live, skills: {}, learnedOn: undefined, toneErrors: undefined });
   };
   const [tagText, setTagText] = useState((word?.tags ?? initial?.tags)?.join(', ') ?? '');
+  // Character / word / name: detected from the entry unless set here (null = detected).
+  const [kindSet, setKindSet] = useState<EntryKind | null>(word?.kind ?? null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,6 +50,8 @@ export function WordForm({ word, initial, onClose }: { word?: Word; initial?: Pa
   const tags = parseTagText(tagText);
   const tagSet = new Set(tags.map((t) => t.toLowerCase()));
   const duplicate = words.find((w) => w.hanzi === hanzi.trim() && w.id !== word?.id);
+  const detected = detectKind({ hanzi, tags });
+  const kind = kindSet ?? detected;
 
   const onHanzi = (v: string) => {
     setHanzi(v);
@@ -78,6 +87,8 @@ export function WordForm({ word, initial, onClose }: { word?: Word; initial?: Pa
         meaning,
         notes,
         tags,
+        // Only a kind that differs from the detected one is stored.
+        kind: kind === detected ? undefined : kind,
       };
       // Merge onto the stored word so progress changes made in this dialog aren't overwritten.
       let saved = word;
@@ -130,6 +141,25 @@ export function WordForm({ word, initial, onClose }: { word?: Word; initial?: Pa
           <span className="field-label">Meaning</span>
           <input className="input" value={meaning} onChange={(e) => setMeaning(e.target.value)} placeholder="Chinese character" required />
         </label>
+
+        <Segmented
+          label={`Kind (detected: ${KIND_LABEL[detected].toLowerCase()})`}
+          value={kind}
+          onChange={(v) => setKindSet(v === detected ? null : v)}
+          options={[
+            { value: 'char', label: KIND_LABEL.char },
+            { value: 'word', label: KIND_LABEL.word },
+            { value: 'name', label: KIND_LABEL.name },
+          ]}
+        />
+        <p className="hint">
+          {kind === 'char'
+            ? 'Characters are learned in Learn and practised with their own schedule.'
+            : kind === 'name'
+              ? 'Names unlock once their characters are learned, and are only used for meaning exercises.'
+              : 'Words have no schedule of their own: they unlock once all their characters are learned and then come up in exercises.'}
+        </p>
+        {live && kind !== 'char' && <LockState word={live} />}
 
         <div className="field">
           <span className="field-label">
@@ -218,7 +248,7 @@ export function WordForm({ word, initial, onClose }: { word?: Word; initial?: Pa
           </div>
         )}
 
-        {live && !isNew(live) && (
+        {live && !isNew(live) && isCharEntry(live) && (
           <div className="field">
             <span className="field-label">Progress</span>
             <div className="progress-box small">

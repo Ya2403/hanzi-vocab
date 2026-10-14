@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useStore } from '../store';
-import { readableStats, strengthByTag, strengthCounts } from '../lib/stats';
+import { entryProgress, readableStats, strengthByTag, strengthCounts } from '../lib/stats';
 import type { Word } from '../lib/types';
 
 /** A small stacked bar: weak / medium / strong. */
@@ -16,14 +16,86 @@ function StrengthBar({ weak, medium, strong }: { weak: number; medium: number; s
   );
 }
 
-/** Words by strength overall and per tag, and rusty words. */
+/** Characters learned and words unlocked: overall and per tag. */
+export function EntryProgressStats({ words }: { words: Word[] }) {
+  const { all, tags } = useMemo(() => entryProgress(words), [words]);
+  const pct = (a: number, b: number) => (b ? (a / b) * 100 : 0);
+  return (
+    <div className="card entry-progress">
+      <h2>Characters &amp; words</h2>
+      <div className="stat-grid">
+        <div className="stat">
+          <div className="stat-value">
+            {all.charsLearned}
+            <span className="stat-of">/{all.chars}</span>
+          </div>
+          <div className="stat-label">characters learned</div>
+        </div>
+        <div className="stat">
+          <div className="stat-value">
+            {all.wordsUnlocked}
+            <span className="stat-of">/{all.words}</span>
+          </div>
+          <div className="stat-label">words unlocked</div>
+        </div>
+      </div>
+      <p className="muted small">A word unlocks (and comes up in exercises) once all its characters are learned.</p>
+      {tags.length > 0 && (
+        <div className="table-scroll">
+          <table className="skill-table tag-table small">
+            <thead>
+              <tr>
+                <th>Tag</th>
+                <th>Characters</th>
+                <th>Words</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tags.map((t) => (
+                <tr key={t.tag}>
+                  <th scope="row">{t.tag}</th>
+                  <td>
+                    {t.chars ? (
+                      <>
+                        {t.charsLearned}/{t.chars}
+                        <span className="lp-bar" aria-hidden="true">
+                          <span style={{ width: `${pct(t.charsLearned, t.chars)}%` }} />
+                        </span>
+                      </>
+                    ) : (
+                      <span className="muted">–</span>
+                    )}
+                  </td>
+                  <td>
+                    {t.words ? (
+                      <>
+                        {t.wordsUnlocked}/{t.words}
+                        <span className="lp-bar" aria-hidden="true">
+                          <span style={{ width: `${pct(t.wordsUnlocked, t.words)}%` }} />
+                        </span>
+                      </>
+                    ) : (
+                      <span className="muted">–</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Characters by strength overall and per tag, and rusty ones. */
 export function SkillStats({ words }: { words: Word[] }) {
   const all = useMemo(() => strengthCounts(words), [words]);
   const tags = useMemo(() => strengthByTag(words), [words]);
 
   return (
     <div className="card skill-stats">
-      <h2>Words by strength</h2>
+      <h2>Characters by strength</h2>
       <div className="stat-grid">
         <div className="stat">
           <div className="stat-value strength-weak">{all.weak}</div>

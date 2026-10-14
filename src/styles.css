@@ -3292,3 +3292,155 @@ body.in-session .view-switch {
 .word-row .example .example-translation {
   color: var(--muted);
 }
+
+/* ---------- Characters & words ---------- */
+.view-switch .segmented {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.view-switch .segmented::-webkit-scrollbar {
+  display: none;
+}
+.view-switch .segmented button {
+  flex: 1 0 auto;
+  min-width: 0;
+  white-space: nowrap;
+  padding: 0.35rem 0.55rem;
+  font-size: 0.85rem;
+}
+.locking-char {
+  text-decoration: underline;
+  text-decoration-color: var(--warn);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+}
+.hanzi.locked-word {
+  color: var(--muted);
+}
+.status.locked {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+.status.unlocked {
+  background: var(--good-soft);
+  color: var(--good);
+}
+.status.needs-work {
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-weight: 600;
+}
+.status.kind-name {
+  background: var(--surface-2);
+  color: var(--easy);
+}
+.used-in {
+  margin-top: 10px;
+  text-align: left;
+}
+.used-in ul {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.used-in li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.used-in-word {
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0 8px;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.used-in-word:disabled {
+  cursor: default;
+}
+.used-in-word:not(:disabled):hover {
+  background: var(--surface-2);
+}
+.used-in-word .hanzi {
+  font-family: var(--font-zh);
+  font-size: 1.15rem;
+}
+.used-in-word .meaning {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0;
+}
+.used-in li.locked .used-in-word {
+  opacity: 0.55;
+}
+.char-formula {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 8px 0;
+}
+.char-formula .formula-word {
+  font-family: var(--font-zh);
+  font-size: 1.2rem;
+}
+.char-formula .formula-part {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.word-chip.not-learned {
+  opacity: 0.6;
+  border-style: dashed;
+}
+.word-chip.missing {
+  border-style: dashed;
+  color: var(--warn);
+}
+.lock-state p {
+  margin: 0 0 6px;
+}
+.lock-state.unlocked {
+  color: var(--good);
+  margin: 0 0 6px;
+}
+.word-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.recent-dots {
+  display: inline-flex;
+  gap: 3px;
+}
+.recent-dots .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.recent-dots .dot.ok {
+  background: var(--good);
+}
+.recent-dots .dot.bad {
+  background: var(--bad);
+}
+.entry-progress .lp-bar {
+  display: block;
+  margin-top: 3px;
+  min-width: 60px;
+}

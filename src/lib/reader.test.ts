@@ -35,10 +35,11 @@ describe('reader tokens', () => {
     expect(knownPercent(tokens)).toBe(67); // 4 of 6 words
   });
 
-  it('reviews learned words that were read but not looked up, once each', () => {
-    const tokens = tokenize('我是老师。我是老师。', byHanzi);
+  it('reviews learned characters that were read but not looked up, once each', () => {
+    const chars = new Map([...byHanzi, ['好', w('好', true, '2026-08-01', 5)]]);
+    const tokens = tokenize('我是老师。我是好老师。', chars);
     const plan = finishPlan(tokens, new Set(['我']), NOW);
-    expect(plan.review.map((x) => x.hanzi)).toEqual(['老师']); // likely forgotten (5 days, read 2 months later)
-    expect(plan.seen.map((x) => x.hanzi)).toEqual(['是']); // fresh: accuracy only
+    expect(plan.review.map((x) => x.hanzi)).toEqual(['好']); // likely forgotten (5 days, read 2 months later)
+    expect(plan.seen.map((x) => x.hanzi)).toEqual(['是']); // fresh: accuracy only; 老师 is a word (no schedule)
   });
 });

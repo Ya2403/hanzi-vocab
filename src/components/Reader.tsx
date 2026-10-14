@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../store';
 import { fsrsReview } from '../lib/fsrs';
+import { isWordEntry, recordWordLookup } from '../lib/entries';
 import { describe as describeChar, useHanziDict } from '../lib/hanziDict';
 import { toPinyin } from '../lib/pinyin';
 import { isQuiet, useQuiet } from '../lib/quiet';
@@ -101,8 +102,9 @@ export function Reader({ text, onClose, onFinished, onEdit }: { text: ReaderText
     const w = t.word && words.find((x) => x.id === t.word!.id);
     if (!w || t.kind !== 'learned' || lookedUp.has(w.id)) return;
     setLookedUp((m) => new Map(m).set(w.id, w));
-    const st = recordAnswer(reviewWithLeech(skillState(w, 'meaning'), Grade.Again, leechThreshold).srs, false);
-    updateWord(withSkill(w, 'meaning', st)).catch((e) => console.error('Failed to save lookup', e));
+    // A word: a miss and "needs work". A character: its meaning is graded Again.
+    const next = isWordEntry(w) ? recordWordLookup(w) : withSkill(w, 'meaning', recordAnswer(reviewWithLeech(skillState(w, 'meaning'), Grade.Again, leechThreshold).srs, false));
+    updateWord(next).catch((e) => console.error('Failed to save lookup', e));
   };
 
   const playAll = () => {

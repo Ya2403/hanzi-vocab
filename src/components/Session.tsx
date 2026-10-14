@@ -18,6 +18,7 @@ import { endQuietSession, isQuiet, startQuiet } from '../lib/quiet';
 import { dialoguePositions, withContext, type ContextStep } from '../lib/contextReview';
 import { retrievability } from '../lib/fsrs';
 import { RUSTY_RETRIEVABILITY } from '../lib/planner';
+import { isWordEntry, recordWordAnswer } from '../lib/entries';
 import { ContextCardView, type ContextResult } from './ContextCards';
 import { HanziText } from './HanziText';
 
@@ -173,6 +174,7 @@ export function Session({ title, words: initialWords, mode, direction, skillFor,
       const updated = [...r.others].flatMap(([id, ok]) => {
         const w = wordOf(id);
         if (!w || !isLearned(w)) return [];
+        if (isWordEntry(w)) return [recordWordAnswer(w, ok, now)];
         let st = skillState(w, 'recall');
         if (!ok && retrievability(st, now) < RUSTY_RETRIEVABILITY) st = reviewWithLeech(st, Grade.Again, leechThreshold, now).srs;
         return [{ ...w, skills: { ...w.skills, recall: recordAnswer(st, ok, now) } }];

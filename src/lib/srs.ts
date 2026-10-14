@@ -1,4 +1,5 @@
 import { addDays, today } from './date';
+import { isWordEntry } from './entries';
 import { fsrsReview, learnedState } from './fsrs';
 import { isRadicalOnly } from './learn';
 import { getSettings } from './settings';
@@ -67,14 +68,18 @@ export const WRITING_ENABLED = false;
 
 const writingOn = () => WRITING_ENABLED && getSettings().writingPractice;
 
-/** New = not learned in Learn yet (no skills). */
-export const isNew = (w: Word): boolean => !w.skills.meaning;
-/** Finished Learn: has review schedules. The opposite of isNew. */
-export const isLearned = (w: Word): boolean => !isNew(w);
+/**
+ * Learned: a character that finished Learn (it has review schedules), or a word or name whose
+ * characters are all learned (unlocked). Only learned entries appear in exercises.
+ */
+export const isLearned = (w: Word): boolean => (isWordEntry(w) ? !!w.unlockedOn || !!w.skills.meaning : !!w.skills.meaning);
+/** Not learned yet: a new character (it belongs to Learn), or a locked word. The opposite of isLearned. */
+export const isNew = (w: Word): boolean => !isLearned(w);
 
 /** Skills a word is reviewed on. Radical-only entries (氵…) have no reading: meaning and recall only. */
 export function activeSkills(w: Word, writing: boolean = writingOn()): Skill[] {
-  if (isNew(w)) return [];
+  // Words and names have no schedule: they only keep background statistics.
+  if (isWordEntry(w) || !w.skills.meaning) return [];
   if (isRadicalOnly(w)) return ['meaning', 'recall'];
   const list: Skill[] = ['meaning', 'pinyin', 'recall'];
   const canWrite = writableChars(w.hanzi).length > 0;

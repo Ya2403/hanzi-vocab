@@ -2,7 +2,8 @@ import { isValidDateStr, today } from './date';
 import { migrateLegacySrs, newSrs } from './srs';
 import { toPinyin } from './pinyin';
 import { newId, normalizeTags } from './words';
-import { SKILLS, type Dialogue, type Sentence, type FsrsData, type SentenceSkills, type SkillState, type Skills, type Word } from './types';
+import { reconcileKind } from './entries';
+import { SKILLS, type Dialogue, type Sentence, type FsrsData, type SentenceSkills, type SkillState, type Skills, type Word, type WordStats } from './types';
 
 const FORMAT = 'hanzi-vocab';
 /**
@@ -142,21 +143,17 @@ export function normalizeWord(raw: unknown, fallbackTime: number = Date.now(), o
   let skills: Skills;
   let learnedOn = isValidDateStr(r.learnedOn) ? r.learnedOn : undefined;
   if (r.skills && typeof r.skills === 'object') {
-    skills = {};
-    for (const k of SKILLS) {
-      const v = (r.skills as Record<string, unknown>)[k];
-      if (v && typeof v === 'object') {
-        const { learnedOn: _legacy, ...state } = normalizeSrs(v);
-        skills[k] = state;
-      }
-    }
+    skills = normalizeSkills(r.skills);
   } else {
     const legacy = normalizeSrs(r.srs);
     const m = migrateLegacySrs(id, hanzi, legacy, on);
     skills = m.skills;
     learnedOn ??= m.learnedOn;
   }
-  return {
+  const legacySkills = r.legacySkills && typeof r.legacySkills === 'object' ? normalizeSkills(r.legacySkills) : undefined;
+  const kind = r.kind === 'char' || r.kind === 'word' || r.kind === 'name' ? r.kind : undefined;
+  // Words and names keep only background statistics (see entries.ts).
+  return reconcileKind({
     id,
     hanzi,
     pinyin: str(r.pinyin) || toPinyin(hanzi),
@@ -169,8 +166,38 @@ export function normalizeWord(raw: unknown, fallbackTime: number = Date.now(), o
     createdAt: num(r.createdAt, fallbackTime),
     updatedAt: num(r.updatedAt, fallbackTime),
     skills,
-    learnedOn: skills.meaning ? learnedOn : undefined,
+    learnedOn: skills.meaning || legacySkills?.meaning ? learnedOn : undefined,
     toneErrors: typeof r.toneErrors === 'number' && r.toneErrors > 0 ? Math.round(r.toneErrors) : undefined,
+    kind,
+    stats: normalizeWordStats(r.stats),
+    unlockedOn: isValidDateStr(r.unlockedOn) ? r.unlockedOn : undefined,
+    legacySkills: legacySkills && Object.keys(legacySkills).length ? legacySkills : undefined,
+  });
+}
+
+function normalizeSkills(raw: object): Skills {
+  const skills: Skills = {};
+  for (const k of SKILLS) {
+    const v = (raw as Record<string, unknown>)[k];
+    if (v && typeof v === 'object') {
+      const { learnedOn: _legacy, ...state } = normalizeSrs(v);
+      skills[k] = state;
+    }
+  }
+  return skills;
+}
+
+function normalizeWordStats(raw: unknown): WordStats | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const r = raw as Record<string, unknown>;
+  const count = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.round(v)) : 0);
+  return {
+    answered: count(r.answered),
+    correct: count(r.correct),
+    recent: typeof r.recent === 'string' && /^[01]{0,5}$/.test(r.recent) ? r.recent : '',
+    lastSeen: typeof r.lastSeen === 'number' ? r.lastSeen : undefined,
+    okStreak: count(r.okStreak) || undefined,
+    needsWork: r.needsWork === true || undefined,
   };
 }
 

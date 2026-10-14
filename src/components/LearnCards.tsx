@@ -11,6 +11,7 @@ import { Icon } from './Icon';
 import { SpeakButton } from './SpeakButton';
 import { WordExamples, NotesBox } from './WordExtras';
 import { HanziText } from './HanziText';
+import { UsedIn } from './Entries';
 
 /** Play once when a card appears (respecting the auto-play setting), even under StrictMode. */
 function useAutoPlay(text: string) {
@@ -78,7 +79,7 @@ export function TeachCard({ word, onDone }: { word: Word; onDone(): void }) {
   return (
     <div className="practice teach-practice">
       <div className="card teach-card">
-        <div className="card-kicker">{radical ? 'New component' : 'New word'}</div>
+        <div className="card-kicker">{radical ? 'New component' : 'New character'}</div>
         <div className="teach-head">
           <span className="teach-hanzi" lang="zh-CN">
             <HanziText text={word.hanzi} />
@@ -90,6 +91,7 @@ export function TeachCard({ word, onDone }: { word: Word; onDone(): void }) {
         {radical && <p className="hint">A radical form: you’ll learn to recognize it inside other characters.</p>}
         <ComponentLines word={word} />
         <NotesBox notes={word.notes} />
+        <UsedIn char={word} max={5} />
         <WordExamples word={word} pinyinVisible />
       </div>
       <button className="btn primary teach-done" onClick={onDone} autoFocus>

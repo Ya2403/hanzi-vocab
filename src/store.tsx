@@ -6,6 +6,7 @@ import { cleanInput, createWord, newId } from './lib/words';
 import { cleanSentenceInput, computeLinks, createSentence, migrateExamples, type Links } from './lib/sentences';
 import { isLegacyWord, normalizeDialogue, normalizeSentence, normalizeWord, type ExportData } from './lib/io';
 import { dedupeByHanzi, type Item } from './lib/syncMerge';
+import { computeCharLinks, needsReconcile, reconcileKind, unlockChanges, type CharLinks } from './lib/entries';
 import { initSync, pushItemDeletes, pushItems, pushMeta, replaceAllRemote, type Collection } from './lib/sync';
 import type { DailyStats, Dialogue, DialogueLine, NewWord, Sentence, SentenceInput, StreakState, Word } from './lib/types';
 
@@ -23,6 +24,8 @@ interface Store {
   dialogues: Dialogue[];
   /** Which words each sentence contains, and which sentences each word appears in. */
   links: Links;
+  /** Which characters each word is made of, and which words use each character. */
+  charLinks: CharLinks;
   loading: boolean;
   error: string | null;
   streak: StreakState;
@@ -115,6 +118,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         // updatedAt is kept, so the migration itself isn't pushed as an edit.
         const legacy = stored.filter(isLegacyWord);
         const migrated = legacy.map((w) => normalizeWord(w, w.updatedAt)).filter((w): w is Word => !!w);
+        // Words and names keep background statistics instead of skills (see entries.ts).
+        const legacyIds = new Set(legacy.map((w) => w.id));
+        migrated.push(...stored.filter((w) => !legacyIds.has(w.id) && needsReconcile(w)).map(reconcileKind));
         if (migrated.length) await db.putWords(migrated);
         const byId = new Map(migrated.map((w) => [w.id, w]));
         W.set(stored.map((w) => byId.get(w.id) ?? w));
@@ -143,10 +149,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [loading, W.items]);
 
   const links = useMemo(() => computeLinks(S.items, W.items), [S.items, W.items]);
+  const charLinks = useMemo(() => computeCharLinks(W.items), [W.items]);
+
+  // A word unlocks when its last character is learned (and locks again if one is reset).
+  useEffect(() => {
+    if (loading) return;
+    const changed = unlockChanges(W.items, today());
+    if (!changed.length) return;
+    const now = Date.now();
+    W.save(changed.map((w) => ({ ...w, updatedAt: now }))).catch((e) => console.error('Failed to update unlocked words', e));
+  }, [loading, W.items]);
 
   // ---------- Words ----------
 
   const withExample = (w: Word, example?: string): Word => (example?.trim() ? { ...w, example: example.trim() } : w);
+  /** Clean the edited fields and bring the entry in line with its kind. */
+  const prepare = (w: Word, now: number): Word => reconcileKind({ ...w, ...cleanInput(w), updatedAt: now });
 
   const addWord = useCallback(async (input: NewWord) => {
     const w = withExample(createWord(input), input.example);
@@ -163,13 +181,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const updateWord = useCallback(async (word: Word) => {
-    await W.save([{ ...word, ...cleanInput(word), updatedAt: Date.now() }]);
+    await W.save([prepare(word, Date.now())]);
   }, []);
 
   /** Save several edited words in one transaction (bulk actions). */
   const updateWords = useCallback(async (list: Word[]) => {
     const now = Date.now();
-    await W.save(list.map((w) => ({ ...w, ...cleanInput(w), updatedAt: now })));
+    await W.save(list.map((w) => prepare(w, now)));
   }, []);
 
   const deleteWord = useCallback(async (id: string) => {
@@ -315,7 +333,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           get: () => W.ref.current,
           applyRemote: async (incoming, deleteIds) => {
             // A device still on an older version may send words without skills.
-            const upserts = (incoming as Word[]).map((w) => (isLegacyWord(w) ? (normalizeWord(w, w.updatedAt) ?? w) : w));
+            const upserts = (incoming as Word[]).map((w) => (isLegacyWord(w) ? (normalizeWord(w, w.updatedAt) ?? w) : reconcileKind(w)));
             await W.save(upserts, false);
             await W.remove(deleteIds, false);
           },
@@ -353,6 +371,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       sentences: S.items,
       dialogues: D.items,
       links,
+      charLinks,
       loading,
       error,
       streak,
@@ -372,7 +391,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       recordReview,
       completeSession,
     }),
-    [W.items, S.items, D.items, links, loading, error, streak, daily],
+    [W.items, S.items, D.items, links, charLinks, loading, error, streak, daily],
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

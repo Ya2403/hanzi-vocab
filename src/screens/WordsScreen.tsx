@@ -16,31 +16,40 @@ import { BulkAdd } from '../components/BulkAdd';
 import { WordDetail } from '../components/WordDetail';
 import { Segmented } from '../components/Segmented';
 import { DialoguesView, ReadingsView, SentencesView } from './SentencesScreen';
+import { entryKind, isCharEntry, needsWork } from '../lib/entries';
+import { LockedHanzi } from '../components/Entries';
 
 type Sort = 'newest' | 'oldest' | 'weakest' | 'pinyin';
-type ListView = 'words' | 'sentences' | 'dialogues' | 'readings';
+type ListView = 'chars' | 'words' | 'sentences' | 'dialogues' | 'readings';
+const LIST_VIEWS: ListView[] = ['chars', 'words', 'sentences', 'dialogues', 'readings'];
 const VIEW_KEY = 'hanzi-vocab:listView';
 
 export function WordsScreen() {
-  const { words, loading, deleteWord, addWords } = useStore();
+  const { words: entries, loading, deleteWord, addWords } = useStore();
   const [query, setQuery] = useState('');
   const [tag, setTag] = useState<string | null>(null);
   const { listPinyin } = useSettings();
-  const leechCount = words.filter(isLeech).length;
+
   const [sort, setSort] = useState<Sort>('newest');
   const [editing, setEditing] = useState<Word | 'new' | null>(null);
   const [bulk, setBulk] = useState(false);
   const [detail, setDetail] = useState<Word | null>(null);
-  // Words / Sentences / Dialogues (remembered for this visit).
+  // Characters / Words / Sentences / Dialogues / Readings (remembered for this visit).
   const [view, setView] = useState<ListView>(() => {
     try {
-      return (sessionStorage.getItem(VIEW_KEY) as ListView | null) ?? 'words';
+      const v = sessionStorage.getItem(VIEW_KEY) as ListView | null;
+      return v && LIST_VIEWS.includes(v) ? v : 'chars';
     } catch {
-      return 'words';
+      return 'chars';
     }
   });
+  // The Characters and Words views list their own kind of entry.
+  const charView = view === 'chars';
+  const words = useMemo(() => entries.filter((w) => isCharEntry(w) === charView), [entries, charView]);
+  const leechCount = charView ? words.filter(isLeech).length : 0;
   const switchView = (v: ListView) => {
     setView(v);
+    setTag(null);
     try {
       sessionStorage.setItem(VIEW_KEY, v);
     } catch {
@@ -67,8 +76,8 @@ export function WordsScreen() {
     const cmp: Record<Sort, (a: Word, b: Word) => number> = {
       newest: (a, b) => b.createdAt - a.createdAt,
       oldest: (a, b) => a.createdAt - b.createdAt,
-      // Highest practice priority first; new words last.
-      weakest: (a, b) => (wordPriority(b)?.priority ?? -1) - (wordPriority(a)?.priority ?? -1),
+      // Highest practice priority first (words: needing work, then least accurate); new ones last.
+      weakest: (a, b) => weakness(b) - weakness(a),
       pinyin: (a, b) => normalizeSearch(a.pinyin).localeCompare(normalizeSearch(b.pinyin)),
     };
     return list.sort(cmp[sort]);
@@ -89,7 +98,8 @@ export function WordsScreen() {
         value={view}
         onChange={switchView}
         options={[
-          { value: 'words', label: `Words` },
+          { value: 'chars', label: 'Characters' },
+          { value: 'words', label: 'Words' },
           { value: 'sentences', label: 'Sentences' },
           { value: 'dialogues', label: 'Dialogues' },
           { value: 'readings', label: 'Readings' },
@@ -113,7 +123,7 @@ export function WordsScreen() {
     </>
   );
 
-  if (view !== 'words') {
+  if (view !== 'words' && view !== 'chars') {
     return (
       <section className="screen">
         {viewSwitch}
@@ -132,7 +142,7 @@ export function WordsScreen() {
   return (
     <section className="screen">
       {viewSwitch}
-      {words.length === 0 ? (
+      {entries.length === 0 ? (
         <div className="empty card">
           <div className="empty-mark" lang="zh-CN">词</div>
           <h2>Your word list is empty</h2>
@@ -159,7 +169,7 @@ export function WordsScreen() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search hanzi, pinyin or meaning"
-                aria-label="Search words"
+                aria-label={charView ? 'Search characters' : 'Search words'}
               />
             </label>
             <select className="select" value={sort} onChange={(e) => setSort(e.target.value as Sort)} aria-label="Sort">
@@ -198,10 +208,10 @@ export function WordsScreen() {
 
           <div className="list-header">
             <span className="muted small">
-              {visible.length} of {words.length} words
+              {visible.length} of {words.length} {charView ? 'characters' : 'words'}
             </span>
             <span className="row">
-              {tag && (
+              {tag && charView && (
                 <button className="link-btn" onClick={() => (location.hash = `practice?tag=${encodeURIComponent(tag)}`)}>
                   Practice {tag === LEECH_FILTER ? 'leeches' : `“${tag}”`}
                 </button>
@@ -217,7 +227,7 @@ export function WordsScreen() {
               <WordRow key={w.id} word={w} showPinyin={listPinyin} onOpen={() => setDetail(w)} onEdit={() => setEditing(w)} onDelete={() => remove(w)} />
             ))}
           </ul>
-          {visible.length === 0 && <p className="empty">No words match.</p>}
+          {visible.length === 0 && <p className="empty">{words.length ? 'Nothing matches.' : charView ? 'No characters yet.' : 'No words yet: entries with 2+ characters, phrases and names are listed here.'}</p>}
         </>
       )}
 
@@ -248,7 +258,16 @@ function WordRow({
 }) {
   const [example] = useWordSentences(word);
   const [filling, setFilling] = useState(false);
-  const status = isNew(word) ? (
+  const { charLinks } = useStore();
+  const kind = entryKind(word);
+  const status =
+    kind !== 'char' ? (
+      <>
+        {kind === 'name' && <span className="status kind-name">name</span>}
+        {isNew(word) ? <span className="status locked">🔒 locked</span> : <span className="status unlocked">unlocked</span>}
+        {needsWork(word) && <span className="status needs-work">needs work</span>}
+      </>
+    ) : isNew(word) ? (
     <span className="status new">new</span>
   ) : (
     <>
@@ -262,8 +281,8 @@ function WordRow({
     <li className="word-row card">
       <div className="word-main" onClick={onOpen}>
         <div className="word-head">
-          <span className="hanzi" lang="zh-CN">
-            <HanziText text={word.hanzi} />
+          <span className={`hanzi ${kind !== 'char' && isNew(word) ? 'locked-word' : ''}`} lang="zh-CN">
+            {kind === 'char' ? <HanziText text={word.hanzi} /> : <LockedHanzi word={word} slots={charLinks.charsOf.get(word.id) ?? []} />}
           </span>
           {showPinyin && <span className="pinyin">{word.pinyin}</span>}
         </div>
@@ -304,4 +323,12 @@ function WordRow({
       </div>
     </li>
   );
+}
+
+/** Sort key for "Weakest first": characters by practice priority; words needing work, then by misses. */
+function weakness(w: Word): number {
+  if (isCharEntry(w)) return wordPriority(w)?.priority ?? -1;
+  if (isNew(w)) return -1;
+  const s = w.stats;
+  return (needsWork(w) ? 10 : 0) + (s?.answered ? (1 - s.correct / s.answered) * 5 : 0.5);
 }

@@ -5,13 +5,36 @@ import { isLearned, isNew } from './srs';
 const ON = '2026-09-29';
 
 describe('parseImport', () => {
+  it("turns a word's old skills into background statistics, keeping them", () => {
+    const file = JSON.stringify({
+      words: [
+        {
+          hanzi: '学校',
+          meaning: 'school',
+          skills: {
+            meaning: { ease: 2.5, interval: 4, reps: 2, lapses: 0, due: '2026-09-24', answered: 5, correct: 4, recent: '10111', lastSeen: 100 },
+            recall: { ease: 2.5, interval: 2, reps: 1, lapses: 0, due: '2026-09-30', answered: 3, correct: 1, recent: '010', lastSeen: 200 },
+          },
+        },
+      ],
+    });
+    const [w] = parseImport(file).words;
+    expect(w.skills).toEqual({});
+    expect(Object.keys(w.legacySkills!)).toEqual(['meaning', 'recall']);
+    expect(w.stats).toMatchObject({ answered: 8, correct: 5, recent: '010', lastSeen: 200 });
+    // Exported again and re-imported: unchanged.
+    const [again] = parseImport(JSON.stringify({ words: [w] })).words;
+    expect(again).toMatchObject({ skills: {}, stats: w.stats });
+    expect(again.legacySkills).toEqual(w.legacySkills);
+  });
+
   it('keeps notes, skills and tone errors from a current export', () => {
     const file = JSON.stringify({
       version: 2,
       words: [
         {
-          hanzi: '学校',
-          meaning: 'school',
+          hanzi: '学',
+          meaning: 'to study',
           notes: '  a child 子 learning under a roof  ',
           learnedOn: '2026-09-01',
           toneErrors: 3,

@@ -4,7 +4,7 @@ import dictUrl from '../data/hanzi-dict.json?url';
 import { cachedFetchJson, isCached, pruneCache } from './offlineCache';
 import { toPinyin } from './pinyin';
 import { writableChars } from './strokes';
-import type { Word } from './types';
+import type { NewWord, Word } from './types';
 
 /**
  * Character data from Make Me a Hanzi (LGPL-3.0-or-later), converted by
@@ -245,4 +245,27 @@ export function wordsContaining(dict: HanziDict, component: string, words: Word[
   return words.filter(
     (w) => w.id !== excludeId && writableChars(w.hanzi).some((c) => c === component || deepComponents(dict, c).has(component)),
   );
+}
+
+// ---------- Missing characters ----------
+
+const KIND_TAGS = new Set(['names', 'phrases']);
+
+/**
+ * New character entries for characters of a word that aren't in the list: pinyin and meaning
+ * from the character data (or generated pinyin and a placeholder meaning without it), with the
+ * word's tags (except "names" and "phrases").
+ */
+export function missingCharInputs(missing: { char: string; from: string; tags: string[] }[], dict: HanziDict | null): NewWord[] {
+  const seen = new Set<string>();
+  const out: NewWord[] = [];
+  for (const m of missing) {
+    if (seen.has(m.char)) continue;
+    seen.add(m.char);
+    const g = dict ? gloss(dict, m.char) : undefined;
+    // The word's tags, except the ones that make an entry a name or a phrase.
+    const tags = m.tags.filter((t) => !KIND_TAGS.has(t.trim().toLowerCase()));
+    out.push({ hanzi: m.char, pinyin: g?.pinyin ?? toPinyin(m.char), meaning: g?.meaning ?? `(character in ${m.from})`, tags });
+  }
+  return out;
 }
