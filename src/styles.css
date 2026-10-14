@@ -3588,3 +3588,13 @@ body.in-session .view-switch {
   align-items: center;
   gap: 4px;
 }
+
+/* ---------- Dictation ---------- */
+.dictation-buttons {
+  gap: 12px;
+  margin: 6px 0;
+}
+.slow-btn {
+  min-height: 56px;
+  border-radius: 999px;
+}

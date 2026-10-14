@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useStore } from '../store';
 import { toPinyin } from '../lib/pinyin';
 import { diffChars, normalizeZh, wordResults, type ContextCard, type DiffPart } from '../lib/contextReview';
+import { checkTypedChinese, type TypedCheck, type TypedVerdict } from '../lib/typedChinese';
 import { autoSpeak } from '../lib/quiet';
 import { buildTiles, clozeOptions, tilesCorrect } from '../lib/sentenceLearn';
 import { usePinyinVisibility } from '../lib/settings';
@@ -9,6 +10,7 @@ import { Grade, isLearned } from '../lib/srs';
 import type { Sentence, Word } from '../lib/types';
 import { ClozeChoice, SentenceReveal, TappableSentence } from './SentenceExercises';
 import { BuildChinese, CompleteSentence } from './TileCards';
+import { SentenceDictation, TypeSentence } from './TypedCards';
 import { blankTiles, sentenceBuildTiles, type Blank } from '../lib/tiles';
 import { hanziDictNow } from '../lib/hanziDict';
 import { SpeakButton } from './SpeakButton';
@@ -55,9 +57,9 @@ export function DiffView({ parts }: { parts: DiffPart[] }) {
   );
 }
 
-function Feedback({ ok, children, onNext, onOverride }: { ok: boolean; children?: React.ReactNode; onNext(): void; onOverride?(): void }) {
+function Feedback({ ok, almost, children, onNext, onOverride }: { ok: boolean; almost?: boolean; children?: React.ReactNode; onNext(): void; onOverride?(): void }) {
   return (
-    <div className={`feedback ${ok ? 'ok' : 'bad'}`}>
+    <div className={`feedback ${ok ? 'ok' : almost ? 'meh' : 'bad'}`}>
       <span>{children ?? (ok ? 'Correct!' : 'Not quite.')}</span>
       <div className="row">
         {onOverride && (
@@ -73,38 +75,51 @@ function Feedback({ ok, children, onNext, onOverride }: { ok: boolean; children?
   );
 }
 
-/** Typed Chinese: input → normalized exact match, else the comparison and "I was right". */
-function TypedChinese({
+/** The grade for a typed answer: correct (or "I was right") Good, almost Hard, wrong Again. */
+export const typedGrade = (verdict: TypedVerdict, override = false): number =>
+  override || verdict === 'correct' ? Grade.Good : verdict === 'almost' ? Grade.Hard : Grade.Again;
+
+/**
+ * Typed Chinese: exact (spaces, punctuation and "…" ignored) is correct; one wrong character in
+ * 6+ is "Almost"; otherwise wrong. Whenever it isn't exact: the comparison and "I was right".
+ */
+export function TypedChinese({
   expected,
+  alternatives,
+  sameSound,
   placeholder,
   onChecked,
   onDone,
 }: {
   expected: string;
+  alternatives?: string[];
+  /** Dictation: other characters with the same reading count as correct. */
+  sameSound?: boolean;
   placeholder: string;
   /** The answer was checked (show the full sentence). */
-  onChecked?(): void;
-  onDone(correct: boolean, typed: string, override: boolean): void;
+  onChecked?(check: TypedCheck): void;
+  onDone(result: { verdict: TypedVerdict; typed: string; override: boolean; check: TypedCheck }): void;
 }) {
   const [input, setInput] = useState('');
   const [hint, setHint] = useState<string | null>(null);
-  const [result, setResult] = useState<{ ok: boolean; parts: DiffPart[] } | null>(null);
+  const [result, setResult] = useState<(TypedCheck & { ok: boolean }) | null>(null);
   const ref = useRef<HTMLInputElement>(null);
+  const finish = (override = false) => result && onDone({ verdict: result.verdict, typed: input, override, check: result });
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (result) return onDone(result.ok, input, false);
+    if (result) return finish();
     if (!input.trim()) return;
     if (!/[㐀-鿿]/.test(input)) return setHint('Type the characters (汉字) with a Chinese keyboard.');
-    const ok = normalizeZh(input) === normalizeZh(expected);
-    setResult({ ok, parts: diffChars(normalizeZh(expected), normalizeZh(input)) });
-    onChecked?.();
+    const check = checkTypedChinese(expected, input, { alternatives, sameSound });
+    setResult({ ...check, ok: check.verdict === 'correct' });
+    onChecked?.(check);
     ref.current?.focus();
   };
   return (
     <form className="typing-form" onSubmit={submit}>
       <input
         ref={ref}
-        className={`input typing-input ${result ? (result.ok ? 'is-correct' : 'is-wrong') : ''}`}
+        className={`input typing-input ${result ? (result.ok ? 'is-correct' : result.verdict === 'almost' ? 'is-close' : 'is-wrong') : ''}`}
         value={input}
         onChange={(e) => {
           setInput(e.target.value);
@@ -128,8 +143,9 @@ function TypedChinese({
             type="button"
             className="btn ghost"
             onClick={() => {
-              setResult({ ok: false, parts: diffChars(normalizeZh(expected), '') });
-              onChecked?.();
+              const check = checkTypedChinese(expected, '');
+              setResult({ ...check, ok: false });
+              onChecked?.(check);
             }}
           >
             Don’t know
@@ -139,11 +155,21 @@ function TypedChinese({
           </button>
         </div>
       ) : (
-        <div className={`feedback ${result.ok ? 'ok' : 'bad'}`}>
-          <span>{result.ok ? 'Correct!' : <DiffView parts={result.parts} />}</span>
+        <div className={`feedback ${result.ok ? 'ok' : result.verdict === 'almost' ? 'meh' : 'bad'}`}>
+          <span>
+            {result.ok && !result.note ? (
+              'Correct!'
+            ) : (
+              <>
+                {result.ok ? <b>Correct · {result.note}</b> : result.verdict === 'almost' && <b>Almost: </b>}
+                {input.trim() && <DiffView parts={result.parts} />}
+                {!input.trim() && <span lang="zh-CN">{expected}</span>}
+              </>
+            )}
+          </span>
           <div className="row">
             {!result.ok && input.trim() && (
-              <button type="button" className="btn ghost" onClick={() => onDone(true, input, true)}>
+              <button type="button" className="btn ghost" onClick={() => finish(true)}>
                 I was right
               </button>
             )}
@@ -186,7 +212,7 @@ function ClozeTyped({ s, word, onAnswer }: { s: Sentence; word: Word; onAnswer(q
           setDone(true);
           autoSpeak(s.zh);
         }}
-        onDone={(ok) => onAnswer(ok ? Grade.Good : Grade.Again)}
+        onDone={(r) => onAnswer(typedGrade(r.verdict, r.override))}
       />
     </div>
   );
@@ -215,20 +241,20 @@ function Reply({
   const pv = usePinyinVisibility();
   const [{ tiles, answer }] = useState(() => buildTiles(s, pool, Math.random, known));
   const [placed, setPlaced] = useState<number[]>([]);
-  const [result, setResult] = useState<{ ok: boolean; got: string; override?: boolean } | null>(null);
+  const [result, setResult] = useState<{ ok: boolean; got: string; override?: boolean; almost?: boolean } | null>(null);
   useEffect(() => autoSpeak(prev.zh), []);
 
-  const finish = (ok: boolean, got: string, override = false) => {
-    setResult({ ok: ok || override, got, override });
+  const finish = (ok: boolean, got: string, override = false, almost = false) => {
+    setResult({ ok: ok || override, got, override, almost: almost && !ok && !override });
     autoSpeak(s.zh);
   };
   const next = () => {
     if (!result) return;
     const others = result.ok ? new Map(linked.map((w) => [w.id, true])) : wordResults(s.zh, result.got, linked);
-    // The target word is graded on its own characters (linked[0] is the target).
+    // The target is graded on its own characters (linked[0] is the target); "Almost" on them is Hard.
     const targetOk = result.ok || others.get(linked[0]?.id) === true;
-    others.delete(linked[0]?.id); // graded above, not again as an "other" word
-    onAnswer(targetOk ? Grade.Good : Grade.Again, others);
+    others.delete(linked[0]?.id); // graded above, not again as an "other" item
+    onAnswer(targetOk ? Grade.Good : result.almost ? Grade.Hard : Grade.Again, others);
   };
   useEnter(result && part === 'tiles' ? next : null);
 
@@ -253,16 +279,22 @@ function Reply({
       <div className="practice sentence-practice">
         {prompt}
         {part === 'tiles' && <div className={`tile-line is-${result.ok ? 'right' : 'wrong'}`}>{placed.map((i) => <span key={i} className="tile placed" lang="zh-CN">{tiles[i]}</span>)}</div>}
-        {!result.ok && part === 'typing' && (
+        {!result.ok && part === 'typing' && result.got.trim() && (
           <p className="diff-line">
+            {result.almost && <b>Almost: </b>}
             <DiffView parts={diffChars(normalizeZh(s.zh), normalizeZh(result.got))} />
           </p>
         )}
         <div className="card">
           <SentenceReveal sentence={s} />
         </div>
-        <Feedback ok={result.ok} onNext={next} onOverride={!result.ok && part === 'typing' && result.got.trim() ? () => setResult({ ...result, ok: true, override: true }) : undefined}>
-          {result.override ? 'Counted as right.' : undefined}
+        <Feedback
+          ok={result.ok}
+          almost={result.almost}
+          onNext={next}
+          onOverride={!result.ok && part === 'typing' && result.got.trim() ? () => setResult({ ...result, ok: true, override: true, almost: false }) : undefined}
+        >
+          {result.override ? 'Counted as right.' : result.almost ? 'Almost: one character is off.' : undefined}
         </Feedback>
       </div>
     );
@@ -272,7 +304,13 @@ function Reply({
     <div className="practice sentence-practice">
       {prompt}
       {part === 'typing' ? (
-        <TypedReply expected={s.zh} onDone={(got) => finish(normalizeZh(got) === normalizeZh(s.zh), got)} />
+        <TypedReply
+          expected={s.zh}
+          onDone={(got) => {
+            const check = checkTypedChinese(s.zh, got, { alternatives: s.alternatives });
+            finish(check.verdict === 'correct', got, false, check.verdict === 'almost');
+          }}
+        />
       ) : (
         <>
           <div className="tile-line" aria-label="Your reply">
@@ -365,6 +403,7 @@ export function ContextCardView({
   sentence: s,
   prev,
   onAnswer,
+  onCantListen,
 }: {
   card: ContextCard;
   word: Word;
@@ -372,6 +411,8 @@ export function ContextCardView({
   /** Reply: the dialogue line before, and its speaker. */
   prev?: { sentence: Sentence; speaker?: string; lines: Sentence[] };
   onAnswer(r: ContextResult): void;
+  /** Dictation: "Can't listen now". */
+  onCantListen?(): void;
 }) {
   const { words, links } = useStore();
   const linked = links.bySentence.get(s.id) ?? [];
@@ -405,6 +446,8 @@ export function ContextCardView({
     );
   }
   if (card.ex === 'complete') return <CompleteCard s={s} word={word} blankIds={card.blankIds ?? []} onAnswer={onAnswer} />;
+  if (card.ex === 'type') return <TypeSentence s={s} word={word} linked={linked} onAnswer={onAnswer} />;
+  if (card.ex === 'dictation') return <SentenceDictation s={s} word={word} linked={linked} onAnswer={onAnswer} onCantListen={onCantListen} />;
   return <BuildCard s={s} word={word} linked={linked} onAnswer={onAnswer} />;
 }
 

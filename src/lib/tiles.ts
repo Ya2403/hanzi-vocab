@@ -3,7 +3,7 @@
  * and Complete the sentence (1–3 blanks filled from tiles). Pure functions (randomness passed in),
  * unit-tested.
  */
-import { normalizeZh } from './contextReview';
+import { normalizeZh } from './typedChinese';
 import { entryChars, isCharEntry, isWordEntry, sharesChar } from './entries';
 import type { HanziDict } from './hanziDict';
 import { wordsSimilar } from './learn';

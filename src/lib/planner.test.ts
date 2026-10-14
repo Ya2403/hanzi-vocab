@@ -62,10 +62,11 @@ describe('exercise choice per skill', () => {
     expect(chooseExercise(medium, 'pinyin', { listening: false, rnd: fixed(0.1), on: ON }).ex).toBe('choice');
   });
 
-  it('types recall once it is not weak; pinyin and meaning are never typed', () => {
+  it('types recall once it is not weak; pinyin is never typed as pinyin (strong: dictation); meaning is never typed', () => {
     expect(chooseExercise(medium, 'recall', { listening: true, on: ON })).toEqual({ ex: 'typing', dir: 'en-zh' });
     expect(chooseExercise(strong, 'pinyin', { listening: true, on: ON, rnd: () => 0.9 })).toEqual({ ex: 'choice', dir: 'zh-py' });
-    expect(chooseExercise(strong, 'pinyin', { listening: true, on: ON, rnd: () => 0 })).toEqual({ ex: 'listen', dir: 'zh-py' });
+    expect(chooseExercise(strong, 'pinyin', { listening: true, on: ON, rnd: () => 0 })).toEqual({ ex: 'dictation', dir: 'zh-py' });
+    expect(chooseExercise(strong, 'pinyin', { listening: false, on: ON, rnd: () => 0 })).toEqual({ ex: 'choice', dir: 'zh-py' });
     expect(chooseExercise(strong, 'meaning', { listening: true, on: ON })).toEqual({ ex: 'choice', dir: 'zh-en' });
   });
 

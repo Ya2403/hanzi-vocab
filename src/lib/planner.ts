@@ -14,9 +14,9 @@ export type Strength = 'weak' | 'medium' | 'strong';
 /**
  * choice: multiple choice; translate: Select the correct translation (EN → 3 Chinese options, look-
  * alikes); whichChar: Which character? (a word with one character blanked); build: Build in Chinese
- * (a word from character tiles); listen, typing, writing.
+ * (a word from character tiles); dictation: hear it, type it (pinyin); listen, typing, writing.
  */
-export type Exercise = 'choice' | 'translate' | 'whichChar' | 'build' | 'listen' | 'typing' | 'writing';
+export type Exercise = 'choice' | 'translate' | 'whichChar' | 'build' | 'listen' | 'dictation' | 'typing' | 'writing';
 
 export interface PlannedCard {
   ex: Exercise;
@@ -85,6 +85,8 @@ export function chooseExercise(w: Word, skill: Skill, opts: { listening: boolean
   if (skill === 'recall' && st === 'medium' && isWordEntry(w)) return { ex: 'build', dir };
   if (skill === 'recall' && st !== 'weak') return { ex: 'typing', dir };
   if (skill === 'recall') return { ex: 'translate', dir };
+  // Pinyin: listening sometimes once it isn't weak; when strong, dictation half of the time.
+  if (skill === 'pinyin' && st === 'strong' && opts.listening && rnd() < 0.5) return { ex: 'dictation', dir };
   if (skill === 'pinyin' && st !== 'weak' && opts.listening && rnd() < 0.5) return { ex: 'listen', dir };
   return { ex: 'choice', dir };
 }
@@ -234,7 +236,7 @@ export function practiceCard(w: Word, direction: Direction, opts: PlanOpts & { s
 /** The easier card a missed one becomes when it comes back later in the same session. */
 export function retryOf(step: Step): Step {
   const { card } = step;
-  if (card.kind === 'single' && (card.ex === 'typing' || card.ex === 'listen')) return { ...step, card: { ...card, ex: 'choice' } };
+  if (card.kind === 'single' && (card.ex === 'typing' || card.ex === 'listen' || card.ex === 'dictation')) return { ...step, card: { ...card, ex: 'choice' } };
   if (card.kind === 'single' && (card.ex === 'whichChar' || card.ex === 'build')) return { ...step, card: { ...card, ex: 'translate' } };
   return step;
 }
