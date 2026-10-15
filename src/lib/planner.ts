@@ -296,3 +296,21 @@ export function balanceHint(words: Word[], now: number = Date.now()): { rusty: n
 // ---------- Lessons vs topics ----------
 
 export const isLessonTag = (t: string) => /^(hsk\s*)?lesson\b/i.test(t.trim());
+
+/**
+ * Mix exercise types: never the same type more than twice in a row (when avoidable), and never
+ * the same item twice in a row. Otherwise the order is kept.
+ */
+export function mixTypes<T extends { id: string }>(items: T[], typeOf: (x: T) => string): T[] {
+  const rest = items.slice();
+  const out: T[] = [];
+  while (rest.length) {
+    const [a, b] = [out[out.length - 1], out[out.length - 2]];
+    const tooMany = (x: T) => !!a && !!b && typeOf(a) === typeOf(b) && typeOf(x) === typeOf(a);
+    let i = rest.findIndex((x) => !tooMany(x) && x.id !== a?.id);
+    if (i < 0) i = rest.findIndex((x) => !tooMany(x));
+    if (i < 0) i = 0;
+    out.push(rest.splice(i, 1)[0]);
+  }
+  return out;
+}

@@ -18,7 +18,7 @@ import { QuietBadge } from './QuietBadge';
 import { endQuietSession, isQuiet, startQuiet } from '../lib/quiet';
 import { dialoguePositions, withContext, type ContextStep } from '../lib/contextReview';
 import { retrievability } from '../lib/fsrs';
-import { RUSTY_RETRIEVABILITY } from '../lib/planner';
+import { mixTypes, RUSTY_RETRIEVABILITY } from '../lib/planner';
 import { entryKind, isWordEntry, recordWordAnswer, recordWordLookup } from '../lib/entries';
 import { NO_HINTS_SHARE } from '../lib/hints';
 import { HintProvider, NoHintsLabel } from './Hints';
@@ -58,6 +58,10 @@ type Item = Step | ContextStep;
 const isContext = (s: Item | undefined): s is ContextStep => s?.card.kind === 'context';
 
 const skillKey = (id: string, k: Skill) => `${id}|${k}`;
+
+/** The exercise type of a card (for mixing types). */
+const exerciseType = (s: Item): string =>
+  isContext(s) ? `context:${s.card.ex}` : s.card.kind === 'single' ? `${s.card.ex}:${s.card.dir}` : s.card.kind;
 
 /** Words per Match-pairs round. */
 const MATCH_BATCH = 5;
@@ -112,7 +116,8 @@ export function Session({ title, words: initialWords, mode, direction, skillFor,
     if (mode !== 'auto' || skill) return steps;
     // A word's exercise follows its target character's strength (see planned).
     const plannedById = new Map(initialWords.map((w) => [w.id, planned(w, targetOf(w))]));
-    return withContext(steps, plannedById, { links, lineOf: (id) => lineOf.get(id) }, { use: useSentences, listening: planOpts.listening });
+    // Automatic mode: never the same exercise type more than twice in a row.
+    return mixTypes(withContext(steps, plannedById, { links, lineOf: (id) => lineOf.get(id) }, { use: useSentences, listening: planOpts.listening }), exerciseType);
   });
   const [total, setTotal] = useState(() => queue.length);
   /** First answer per word|skill this session. */

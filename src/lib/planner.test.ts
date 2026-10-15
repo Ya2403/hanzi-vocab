@@ -184,3 +184,13 @@ describe('isLessonTag', () => {
     expect(['HSK lesson 1', 'lesson 3', 'Lesson5', 'HSK1', 'food', 'lessons learned'].map(isLessonTag)).toEqual([true, true, false, false, false, false]);
   });
 });
+
+describe('mixing exercise types', () => {
+  it('never puts the same type more than twice in a row', async () => {
+    const { mixTypes } = await import('./planner');
+    const items = ['a', 'b', 'c', 'd', 'e', 'f'].map((id, i) => ({ id, t: i < 4 ? 'choice' : 'typing' }));
+    const out = mixTypes(items, (x) => x.t).map((x) => x.t);
+    for (let i = 2; i < out.length; i++) expect(out[i] === out[i - 1] && out[i] === out[i - 2]).toBe(false);
+    expect(out).toHaveLength(6);
+  });
+});
