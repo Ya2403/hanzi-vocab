@@ -8,12 +8,13 @@ import { buildTiles, clozeOptions, tilesCorrect } from '../lib/sentenceLearn';
 import { usePinyinVisibility } from '../lib/settings';
 import { Grade, isLearned } from '../lib/srs';
 import type { Sentence, Word } from '../lib/types';
-import { ClozeChoice, SentenceReveal, TappableSentence } from './SentenceExercises';
+import { ClozeChoice, SentenceReveal } from './SentenceExercises';
 import { BuildChinese, CompleteSentence } from './TileCards';
 import { SentenceDictation, TypeSentence } from './TypedCards';
 import { blankTiles, sentenceBuildTiles, type Blank } from '../lib/tiles';
 import { hanziDictNow } from '../lib/hanziDict';
 import { SpeakButton } from './SpeakButton';
+import { HintEn, HintZh } from './Hints';
 
 /** What a sentence card graded: the target word, words also highlighted, other words of a reply (right or wrong). */
 export interface ContextResult {
@@ -188,9 +189,9 @@ function Blanked({ s, word }: { s: Sentence; word: Word }) {
   const at = s.zh.indexOf(word.hanzi);
   return (
     <div className="prompt-sentence cloze-sentence" lang="zh-CN">
-      {s.zh.slice(0, at)}
+      <HintZh text={s.zh.slice(0, at)} exclude={[word]} />
       <span className="cloze-gap">{'＿'.repeat([...word.hanzi].length)}</span>
-      {s.zh.slice(at + word.hanzi.length)}
+      <HintZh text={s.zh.slice(at + word.hanzi.length)} exclude={[word]} />
     </div>
   );
 }
@@ -202,7 +203,9 @@ function ClozeTyped({ s, word, onAnswer }: { s: Sentence; word: Word; onAnswer(q
     <div className="practice sentence-practice">
       <div className="card prompt-card">
         <div className="card-kicker">Fill in the blank</div>
-        <div className="prompt-meaning cloze-translation">{s.translation}</div>
+        <div className="prompt-meaning cloze-translation">
+          <HintEn text={s.translation} sentence={s} exclude={[word]} />
+        </div>
         {done === null ? <Blanked s={s} word={word} /> : <SentenceReveal sentence={s} />}
       </div>
       <TypedChinese
@@ -263,13 +266,15 @@ function Reply({
       <div className="card-kicker">Reply in the dialogue</div>
       <div className="sentence-head center">
         {prevSpeaker && <span className="speaker">{prevSpeaker}</span>}
-        <TappableSentence zh={prev.zh} className="prompt-sentence" />
+        <HintZh text={prev.zh} exclude={[linked[0]]} className="prompt-sentence" />
         <SpeakButton text={prev.zh} size={18} />
       </div>
       {pv.question && <div className="pinyin small">{prev.pinyin}</div>}
       <div className="reply-english">
         <span className="muted small">Your reply: </span>
-        <b>{s.translation}</b>
+        <b>
+          <HintEn text={s.translation} sentence={s} exclude={[linked[0]]} />
+        </b>
       </div>
     </div>
   );
@@ -462,7 +467,11 @@ function BuildCard({ s, word, linked, onAnswer }: { s: Sentence; word: Word; lin
   return (
     <BuildChinese
       kicker="Build it in Chinese"
-      prompt={<div className="prompt-meaning">{s.translation}</div>}
+      prompt={
+        <div className="prompt-meaning">
+          <HintEn text={s.translation} sentence={s} exclude={[word]} />
+        </div>
+      }
       answer={set.answer}
       tiles={set.tiles}
       alternatives={s.alternatives}

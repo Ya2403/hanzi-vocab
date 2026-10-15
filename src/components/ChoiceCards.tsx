@@ -11,6 +11,7 @@ import { HanziText } from './HanziText';
 import { Icon } from './Icon';
 import { SentenceReveal } from './SentenceExercises';
 import { SpeakButton } from './SpeakButton';
+import { HintZh } from './Hints';
 
 /** 1–4 pick an option, Enter / Space continues once answered. */
 function useChoiceKeys(count: number, onPick: (i: number) => void, onNext: (() => void) | null) {
@@ -158,7 +159,7 @@ export function ChatChoice({
         <div className="chat-row a">
           <span className="speaker">{speakerOf(index - 1) ?? 'A'}</span>
           <div className="chat-bubble">
-            <span lang="zh-CN">{prompt.zh}</span> <SpeakButton text={prompt.zh} size={16} />
+            <HintZh text={prompt.zh} /> <SpeakButton text={prompt.zh} size={16} />
             {pv.question && <div className="pinyin small">{prompt.pinyin}</div>}
             {answered && <div className="muted small">{prompt.translation}</div>}
           </div>

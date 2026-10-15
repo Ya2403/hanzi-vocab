@@ -12,6 +12,7 @@ import { HanziText } from './HanziText';
 import { SpeakButton } from './SpeakButton';
 import type { Sentence, Word } from '../lib/types';
 import { SentenceReveal } from './SentenceExercises';
+import { HintEn, HintZh } from './Hints';
 
 /** Tapping a tile says it (unless listening is paused). */
 const sayTile = (t: string) => {
@@ -185,11 +186,13 @@ export function CompleteSentence({ s, blanks, tiles, onDone }: { s: Sentence; bl
     <div className="practice sentence-practice">
       <div className="card prompt-card">
         <div className="card-kicker">Complete the sentence</div>
-        <div className="prompt-meaning">{s.translation}</div>
+        <div className="prompt-meaning">
+          <HintEn text={s.translation} sentence={s} exclude={blanks.map((b) => b.item)} />
+        </div>
         <div className="complete-line" lang="zh-CN">
           {parts.map((p, i) =>
             'text' in p ? (
-              <span key={i}>{p.text}</span>
+              <HintZh key={i} text={p.text} exclude={blanks.map((b) => b.item)} />
             ) : (
               <button
                 key={i}

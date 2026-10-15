@@ -28,6 +28,8 @@ export interface Settings {
   useSentences: 'off' | 'some' | 'max';
   /** Practice: do character reviews through their unlocked words (off / ~40% / ~75%), and add words that need work. */
   wordsInPractice: 'off' | 'some' | 'lot';
+  /** Exercises: tap Chinese or English words in a prompt for a hint (a lookup). The Reader always allows taps. */
+  tapHints: boolean;
   /** Learn mode: words taught per batch. */
   learnBatchSize: number;
   /** Learn mode: new words per day. */
@@ -68,6 +70,7 @@ const defaults: Settings = {
   practiceSize: 20,
   useSentences: 'some',
   wordsInPractice: 'some',
+  tapHints: true,
   learnBatchSize: 6,
   learnDailyLimit: 15,
   learnTyping: false,

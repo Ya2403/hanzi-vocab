@@ -3598,3 +3598,46 @@ body.in-session .view-switch {
   min-height: 56px;
   border-radius: 999px;
 }
+
+/* ---------- Tap a word for a hint ---------- */
+.hint-word {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline dotted;
+  text-decoration-color: var(--muted);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 0.22em;
+  cursor: pointer;
+}
+.hint-word.open {
+  background: var(--accent-soft);
+  border-radius: 4px;
+}
+.hint-popup {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  z-index: 50;
+  max-width: 560px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+  font-size: 1rem;
+  font-weight: normal;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.18);
+}
+.no-hints {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.7rem;
+}

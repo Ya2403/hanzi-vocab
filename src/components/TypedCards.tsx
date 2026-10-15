@@ -12,6 +12,7 @@ import { CharFormula } from './Entries';
 import { HanziText } from './HanziText';
 import { Icon } from './Icon';
 import { SpeakButton } from './SpeakButton';
+import { HintEn } from './Hints';
 
 /** Slow play speed for dictation. */
 const SLOW = 0.55;
@@ -133,7 +134,9 @@ export function TypeSentence({ s, word, linked, onAnswer }: { s: Sentence; word:
     <div className="practice sentence-practice">
       <div className="card prompt-card">
         <div className="card-kicker">Type it in Chinese</div>
-        <div className="prompt-meaning">{s.translation}</div>
+        <div className="prompt-meaning">
+          <HintEn text={s.translation} sentence={s} exclude={[word]} />
+        </div>
         {checked && <SentenceReveal sentence={s} />}
       </div>
       <TypedChinese

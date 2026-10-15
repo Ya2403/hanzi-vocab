@@ -157,6 +157,14 @@ export function PracticeScreen({ onGoToLearn, onGoToWords }: { onGoToLearn(): vo
             A character can be practised through one of its unlocked words (about 40% of the time with Some, 75% with A lot). A word answer
             counts for its characters. Words that need work (missed or looked up) also come up on their own.
           </p>
+          <label className="toggle">
+            <input type="checkbox" checked={settings.tapHints} onChange={(e) => updateSettings({ tapHints: e.target.checked })} />
+            <span>Tap words for hints</span>
+          </label>
+          <p className="hint">
+            Words in a prompt (Chinese, and English) have a dotted underline: tap one to see what it means. Tapping something you’ve learned
+            counts as a lookup. The tested item is never tappable, and about 1 in 4 exercises for well-known items have no hints.
+          </p>
           {settings.autoExercise && (
             <>
               <Segmented

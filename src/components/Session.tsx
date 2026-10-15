@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../store';
 import { cardsFor, DELAYED_RECALL, practiceCard, retryOf, spreadSteps, testedSkills, type SessionMode, type Step } from '../lib/planner';
-import { activeSkills, Grade, isLearned, recordAnswer, reviewWithLeech, SKILL_LABEL, skillState } from '../lib/srs';
+import { activeSkills, Grade, isLearned, recordAnswer, reviewWithLeech, SKILL_LABEL, skillState, withSkill } from '../lib/srs';
+import { skillStrength } from '../lib/planner';
 import type { Direction, Skill, Skills, Word } from '../lib/types';
 import { Flashcard } from './Flashcard';
 import { MultipleChoice } from './MultipleChoice';
@@ -18,7 +19,9 @@ import { endQuietSession, isQuiet, startQuiet } from '../lib/quiet';
 import { dialoguePositions, withContext, type ContextStep } from '../lib/contextReview';
 import { retrievability } from '../lib/fsrs';
 import { RUSTY_RETRIEVABILITY } from '../lib/planner';
-import { entryKind, isWordEntry, recordWordAnswer } from '../lib/entries';
+import { entryKind, isWordEntry, recordWordAnswer, recordWordLookup } from '../lib/entries';
+import { NO_HINTS_SHARE } from '../lib/hints';
+import { HintProvider, NoHintsLabel } from './Hints';
 import { targetChar } from '../lib/wordPractice';
 import { ContextCardView, type ContextResult } from './ContextCards';
 import { HanziText } from './HanziText';
@@ -66,7 +69,7 @@ const MATCH_BATCH = 5;
  */
 export function Session({ title, words: initialWords, mode, direction, skillFor, skill, targets, onExit, onFinish, onAnotherRound }: Props) {
   const { words: allWords, sentences, dialogues, links, charLinks, updateWord, updateWords, recordReview, completeSession } = useStore();
-  const { writingStyle, leechThreshold, showPinyin, choiceStyle, useSentences } = useSettings();
+  const { writingStyle, leechThreshold, showPinyin, choiceStyle, useSentences, tapHints } = useSettings();
   const lineOf = useMemo(() => dialoguePositions(dialogues, sentences), [dialogues, sentences]);
 
   // Look-alike distractors need the character data: load it early (it's cached offline).
@@ -346,6 +349,27 @@ export function Session({ title, words: initialWords, mode, direction, skillFor,
     setStep((s) => s + 1);
   };
 
+  // Hints: items tapped for a hint this session (a lookup each), and "Practise these" from the summary.
+  const [lookedUp, setLookedUp] = useState<Map<string, Word>>(new Map());
+  const [practice, setPractice] = useState<Word[] | null>(null);
+  /** A learned item tapped for a hint: a character's meaning is graded Again; a word gets a miss and "needs work". */
+  const lookup = (item: Word) => {
+    const w = wordOf(item.id) ?? item;
+    const next = isWordEntry(w) ? recordWordLookup(w) : withSkill(w, 'meaning', recordAnswer(reviewWithLeech(skillState(w, 'meaning'), Grade.Again, leechThreshold).srs, false));
+    updateWord(next).catch((e) => console.error('Failed to save lookup', e));
+    setLookedUp((m) => new Map(m).set(w.id, w));
+  };
+  // For items with strong recall, about 1 exercise in 4 has no hints at all.
+  const noHints = useMemo(() => {
+    if (!current || !word) return false;
+    const item = current.target ? wordOf(current.target) : isWordEntry(word) ? undefined : word;
+    if (!item?.skills.recall) return false;
+    return skillStrength(skillState(item, 'recall'), item.learnedOn) === 'strong' && Math.random() < NO_HINTS_SHARE;
+  }, [step, current?.id]);
+  const hintsOn = tapHints && !noHints;
+
+  if (practice) return <Session title="Looked-up words" words={practice} mode="auto" direction="mixed" onExit={() => setPractice(null)} />;
+
   // Rendered on top of whatever is showing (the next card, or the summary after the last one).
   const leechPrompt = leech && <LeechPrompt wordId={leech.id} lapses={leech.lapses} skill={SKILL_LABEL[leech.skill]} onClose={() => setLeech(null)} />;
 
@@ -374,6 +398,25 @@ export function Session({ title, words: initialWords, mode, direction, skillFor,
                 </li>
               ))}
             </ul>
+          </>
+        )}
+        {lookedUp.size > 0 && (
+          <>
+            <h3>Words you looked up</h3>
+            <ul className="missed">
+              {[...lookedUp.values()].map((w) => (
+                <li key={w.id}>
+                  <span className="hanzi" lang="zh-CN">
+                    <HanziText text={w.hanzi} />
+                  </span>
+                  {pinyin.answer && <span className="pinyin">{w.pinyin}</span>}
+                  <span className="meaning">{w.meaning}</span>
+                </li>
+              ))}
+            </ul>
+            <button className="btn" onClick={() => setPractice([...lookedUp.values()].map((w) => wordOf(w.id) ?? w))}>
+              Practise these
+            </button>
           </>
         )}
         <div className="row center">
@@ -418,6 +461,12 @@ export function Session({ title, words: initialWords, mode, direction, skillFor,
         {title} · {label}
         {current.delayed && ' · recall'}
         {retried.has(current.id) && results.has(skillKey(current.id, isContext(current) ? current.card.skill : testedSkills(current.card)[0])) && ' · again'}
+        {tapHints && noHints && (
+          <>
+            {' '}
+            <NoHintsLabel />
+          </>
+        )}
       </div>
     </>
   );
@@ -452,6 +501,7 @@ export function Session({ title, words: initialWords, mode, direction, skillFor,
     return (
       <div className="session">
         {sessionBar(`${SKILL_LABEL[current.card.skill].toLowerCase()} · ${ex}`)}
+        <HintProvider key={step} enabled={hintsOn} onLookup={lookup}>
         {sentence && current.card.ex === 'chat' && dialogue && pos ? (
           <ChatChoice key={step} dialogue={dialogue} lines={pos.lines} index={pos.index} onAnswer={(q) => answerContext({ q })} fallback={contextCard} />
         ) : sentence ? (
@@ -461,6 +511,7 @@ export function Session({ title, words: initialWords, mode, direction, skillFor,
             Skip (sentence not found)
           </button>
         )}
+        </HintProvider>
       </div>
     );
   }
@@ -492,7 +543,9 @@ export function Session({ title, words: initialWords, mode, direction, skillFor,
   return (
     <div className="session">
       {sessionBar(label)}
-      {card}
+      <HintProvider key={step} enabled={hintsOn} onLookup={lookup}>
+        {card}
+      </HintProvider>
     </div>
   );
 }

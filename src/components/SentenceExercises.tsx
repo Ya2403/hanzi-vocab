@@ -12,6 +12,7 @@ import { writableChars } from '../lib/strokes';
 import type { Sentence, Word } from '../lib/types';
 import { Icon } from './Icon';
 import { SpeakButton } from './SpeakButton';
+import { HintEn, HintZh } from './Hints';
 
 /** 1–9 pick an option, Enter / Space continue (unless typing or a popup is open). */
 function useKeys(onNumber: (n: number) => void, onEnter: (() => void) | null) {
@@ -230,14 +231,16 @@ export function ClozeChoice({ sentence: s, target, options, onAnswer }: { senten
     <div className="practice sentence-practice">
       <div className="card prompt-card">
         <div className="card-kicker">Fill in the blank</div>
-        <div className="prompt-meaning cloze-translation">{s.translation}</div>
+        <div className="prompt-meaning cloze-translation">
+          <HintEn text={s.translation} sentence={s} exclude={[target]} />
+        </div>
         {answered ? (
           <SentenceReveal sentence={s} />
         ) : (
           <div className="prompt-sentence cloze-sentence" lang="zh-CN">
-            {s.zh.slice(0, at)}
+            <HintZh text={s.zh.slice(0, at)} exclude={[target]} />
             <span className="cloze-gap">{'＿'.repeat([...target.hanzi].length)}</span>
-            {s.zh.slice(at + target.hanzi.length)}
+            <HintZh text={s.zh.slice(at + target.hanzi.length)} exclude={[target]} />
           </div>
         )}
       </div>
